@@ -1,0 +1,1291 @@
+***First all ,we have to move the reference that we used to use adn move to the data file of project***
+
+## ✅ Files to Move to `~/bulkRNA/data`
+
+### 🔬 From `~/scRNAseqproject/data` (for transcript-level quantification)
+
+| File | Purpose |
+|------------------------------------|------------------------------------|
+| `gencode.v43.transcripts.fa.gz` | Transcriptome FASTA for Salmon/Kallisto |
+| `gencode.v43.annotation.gtf.gz` | Gene annotation for tximport or featureCounts |
+| `transcripts.idx` | Salmon index (if compatible) |
+| `transcripts_to_genes.txt` | Transcript-to-gene mapping for tximport |
+| `fastp.json`, `fastp_report.html` | QC reference (optional) |
+| `run_pipeline.sh` | Can adapt for bulk RNA-Seq logic |
+
+``` bash
+cp ~/scRNAseqproject/data/gencode.v43.* ~/bulkRNA/data/
+cp ~/scRNAseqproject/data/transcripts.idx ~/bulkRNA/data/
+cp ~/scRNAseqproject/data/transcripts_to_genes.txt ~/bulkRNA/data/
+cp ~/scRNAseqproject/data/fastp.* ~/bulkRNA/data/
+cp ~/scRNAseqproject/data/run_pipeline.sh ~/bulkRNA/data/
+```
+
+### 🧬 From `~/miRNA/data` (for genome-based alignment or featureCounts)
+
+| File | Purpose |
+|------------------------------------|------------------------------------|
+| `Homo_sapiens.GRCh38.dna.primary_assembly.fa` | Genome FASTA for STAR/HISAT2 |
+| `GRCh38_index.*.ebwt` | Bowtie2 index (if using Bowtie2) |
+| `hsa.gff3` | GFF3 annotation (optional, if GTF not available) |
+| `subread-2.0.3-Linux-x86_64` | FeatureCounts binary (if not installed globally) |
+
+``` bash
+cp ~/miRNA/data/Homo_sapiens.GRCh38.dna.primary_assembly.fa ~/bulkRNA/data/
+cp ~/miRNA/data/GRCh38_index.* ~/bulkRNA/data/
+cp -r ~/miRNA/data/subread-2.0.3-Linux-x86_64 ~/bulkRNA/data/
+cp ~/miRNA/data/hsa.gff3 ~/bulkRNA/data/
+```
+
+``` bash
+jayz@localhost:~/bulkRNA/data$ ls
+GRCh38_index.1.ebwt
+GRCh38_index.2.ebwt
+GRCh38_index.3.ebwt
+GRCh38_index.4.ebwt
+GRCh38_index.rev.1.ebwt
+GRCh38_index.rev.2.ebwt
+Homo_sapiens.GRCh38.dna.primary_assembly.fa
+fastp.json
+gencode.v43.annotation.gtf.gz
+gencode.v43.transcripts.fa.gz
+hsa.gff3
+run_pipeline.sh
+subread-2.0.3-Linux-x86_64
+transcripts.idx
+transcripts_to_genes.txt
+```
+
+**SRX29021922 / GSM9020640 / SRR33800281** — is **exactly the kind of bulk RNA-Seq data** you can use for your project. Here's why it's suitable:
+
+### ✅ Why This Dataset Is a Good Fit
+
+| Attribute | Details |
+|------------------------------------|------------------------------------|
+| **Organism** | *Homo sapiens* |
+| **Strategy** | RNA-Seq |
+| **Source** | Transcriptomic |
+| **Selection** | cDNA |
+| **Layout** | Single-end |
+| **Instrument** | Illumina NextSeq 550 |
+| **Protocol** | QuantSeq (ideal for 3' mRNA sequencing) |
+| **Size** | 243MB, 9.1M reads — manageable and informative |
+| **Study** | Focused on gut motility and nitrergic neurons — biologically relevant |
+| **Submitted by** | UCSF Fattahi Lab — reputable source |
+
+## 🧬Get the data
+
+**Download FASTQ** using `fasterq-dump` or `prefetch`:
+
+```         
+prefetch SRR33800281 
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA/reference$ prefetch SRR33800281
+
+2025-10-24T08:58:15 prefetch.3.0.3: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+
+2025-10-24T08:59:36 prefetch.3.0.3: 1) Downloading 'SRR33800281'...
+2025-10-24T08:59:36 prefetch.3.0.3: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-24T08:59:36 prefetch.3.0.3:  Downloading via HTTPS...
+2025-10-24T09:00:02 prefetch.3.0.3:  HTTPS download succeed
+2025-10-24T09:00:03 prefetch.3.0.3:  'SRR33800281' is valid
+2025-10-24T09:00:03 prefetch.3.0.3: 1) 'SRR33800281' was downloaded successfully
+2025-10-24T09:00:03 prefetch.3.0.3: 'SRR33800281' has 0 unresolved dependencies
+```
+
+### Get the fastq data
+
+``` bash
+fasterq-dump SRR33800281.sra -e 8
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA/data$ fasterq-dump SRR33800281.sra -e 8
+spots read      : 9,056,000
+reads read      : 9,056,000
+reads written   : 9,056,000
+```
+
+-   **"Layout: SINGLE"** means that **only one read per fragment** was retained or submitted — so **this dataset is single-end**, not paired-end.
+
+This is common with **QuantSeq** protocols, which often generate only the **3′ end** of transcripts and submit just **Read 1**.
+
+## ✅ Run FastQC
+
+Assuming you're still in `/mnt/d/01datawsl/bulkRNA/data` and the output file is `SRR33800281.fastq`, run:
+
+``` bash
+fastqc SRR33800281.fastq 
+```
+
+-   `SRR33800281.fastq` is your input FASTQ file
+
+-   `-o ./fastqc_output` tells FastQC to save results in a subfolder
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA/data$ fastqc SRR33800281.fastq 
+null
+Started analysis of SRR33800281.fastq
+Approx 5% complete for SRR33800281.fastq
+Approx 10% complete for SRR33800281.fastq
+Approx 15% complete for SRR33800281.fastq
+Approx 20% complete for SRR33800281.fastq
+Approx 25% complete for SRR33800281.fastq
+Approx 30% complete for SRR33800281.fastq
+Approx 35% complete for SRR33800281.fastq
+Approx 40% complete for SRR33800281.fastq
+Approx 45% complete for SRR33800281.fastq
+Approx 50% complete for SRR33800281.fastq
+Approx 55% complete for SRR33800281.fastq
+Approx 60% complete for SRR33800281.fastq
+Approx 65% complete for SRR33800281.fastq
+Approx 70% complete for SRR33800281.fastq
+Approx 75% complete for SRR33800281.fastq
+Approx 80% complete for SRR33800281.fastq
+Approx 85% complete for SRR33800281.fastq
+Approx 90% complete for SRR33800281.fastq
+Approx 95% complete for SRR33800281.fastq
+Approx 100% complete for SRR33800281.fastq
+Analysis complete for SRR33800281.fastq
+```
+
+![](images/屏幕截图%202025-10-26%20135924-2.png)
+
+![](images/屏幕截图%202025-10-26%20135935.png)
+
+![](images/屏幕截图%202025-10-26%20135942.png)
+
+![](images/屏幕截图%202025-10-26%20140002.png)
+
+![](images/屏幕截图%202025-10-26%20140009.png)
+
+![](images/屏幕截图%202025-10-26%20140014.png)
+
+## Summary of Necessary Upstream Processing Steps
+
+Based on the failures, your primary and essential upstream quality control steps must be:
+
+1.  **Adapter and Quality Trimming:** Use **Trimmomatic** or **Cutadapt** to perform a combined step:
+
+    -   **Adapter removal:** Search for and cut off the sequencing adapter sequence (fixes **Adapter Content** and often helps **Overrepresented sequences**).
+
+    -   **Quality Trimming:** Remove low-quality bases from the $3'$ end of the reads (based on the $\mathbf{Q20/Q30}$ threshold) (fixes the tail of the **Per base sequence quality** plot).
+
+2.  **Contaminant Filtering (if needed):** If the **GC Content** or **Overrepresented sequences** point to high rRNA or foreign DNA, use a dedicated tool to filter those reads out.
+
+## 🔧 Essential Upstream Processing Steps
+
+### 1. ✂️ **Adapter and Quality Trimming**
+
+Use tools like **Trimmomatic**, **Cutadapt**, or **fastp** to perform:
+
+#### a. **Adapter Removal**
+
+-   Detect and remove sequencing adapters (often present at the 3′ end).
+
+-   Fixes:
+
+    -   **Adapter Content** module failures in FastQC
+
+    -   **Overrepresented sequences** caused by adapter read-through
+
+#### b. **Quality Trimming**
+
+-   Trim low-quality bases from the **3′ end** based on Phred scores:
+
+    -   Use thresholds like **Q20** (1% error rate) or **Q30** (0.1% error rate)
+
+-   Fixes:
+
+    -   Poor scores in **Per base sequence quality** plots
+
+    -   Red zone dips in FastQC
+
+#### Example with `fastp`:
+
+```         
+fastp -i SRR33800281.fastq -o SRR33800281.trimmed.fastq \
+  --cut_tail --qualified_quality_phred 20 --length_required 30 \
+  --detect_adapter_for_pe -j fastp.json -h fastp.html
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA/data$ fastp -i SRR33800281.fastq -o SRR33800281.trimmed.fastq \
+  --cut_tail --qualified_quality_phred 20 --length_required 30 \
+  --detect_adapter_for_pe -j fastp.json -h fastp.html
+Detecting adapter sequence for read1...
+No adapter detected for read1
+
+Read1 before filtering:
+total reads: 9056000
+total bases: 461856000
+Q20 bases: 435845240(94.3682%)
+Q30 bases: 380562819(82.3986%)
+
+Read1 after filtering:
+total reads: 9020701
+total bases: 454775892
+Q20 bases: 432878024(95.1849%)
+Q30 bases: 379432421(83.4328%)
+
+Filtering result:
+reads passed filter: 9020701
+reads failed due to low quality: 6349
+reads failed due to too many N: 375
+reads failed due to too short: 28575
+reads with adapter trimmed: 0
+bases trimmed due to adapters: 0
+
+Duplication rate (may be overestimated since this is SE data): 84.3752%
+
+JSON report: fastp.json
+HTML report: fastp.html
+
+fastp -i SRR33800281.fastq -o SRR33800281.trimmed.fastq --cut_tail --qualified_quality_phred 20 --length_required 30 --detect_adapter_for_pe -j fastp.json -h fastp.html
+fastp v0.23.4, time used: 16 seconds
+```
+
+### 2. 🧹 **Contaminant Filtering (if needed)**
+
+#### ✅ **BBduk** (fast, flexible, good for rRNA/adapters)
+
+**Install BBTools** (if not already):
+
+``` bash
+sudo apt install bbmap 
+```
+
+#### Manually Provide Adapter File
+
+You can download a standard adapter file and point BBduk to it directly:
+
+1.  **Download adapter file**:
+
+```         
+wget https://raw.githubusercontent.com/BioInfoTools/BBMap/master/resources/adapters.fa -O adapters.fa 
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA/data$ wget https://raw.githubusercontent.com/BioInfoTools/BBMap/master/resources/adapters.fa -O adapters.fa 
+--2025-10-26 14:24:42--  https://raw.githubusercontent.com/BioInfoTools/BBMap/master/resources/adapters.fa
+Resolving raw.githubusercontent.com (raw.githubusercontent.com)... 185.199.111.133, 185.199.109.133, 185.199.108.133, ...
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|185.199.111.133|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 14255 (14K) [text/plain]
+Saving to: ‘adapters.fa’
+
+adapters.fa            100%[==========================>]  13.92K  --.-KB/s    in 0.02s   
+
+2025-10-26 14:24:44 (559 KB/s) - ‘adapters.fa’ saved [14255/14255]
+```
+
+#### **Run BBduk to remove rRNA/adapters/low-complexity reads**:
+
+``` bash
+bbduk.sh in=SRR33800281.trimmed.fastq out=SRR33800281.cleaned.fastq \
+  ref=adapters.fa \
+  ktrim=r k=23 mink=11 hdist=1 \
+  qtrim=r trimq=20 maq=20 \
+  stats=bbduk_stats.txt
+```
+
+-   `ref=adapters,phix`: built-in adapter and PhiX contamination
+
+-   `ktrim=r`: trims from the right end
+
+-   `qtrim=r trimq=20`: trims low-quality bases from 3′ end
+
+-   `maq=20`: removes reads with average quality \< Q20
+
+We can also add a custom rRNA reference if needed.
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA/data$ bbduk.sh in=SRR33800281.trimmed.fastq out=SRR33800281.cleaned.fastq \
+  ref=adapters.fa \
+  ktrim=r k=23 mink=11 hdist=1 \
+  qtrim=r trimq=20 maq=20 \
+  stats=bbduk_stats.txt
+java -ea -Xmx3067m -Xms3067m -cp /usr/share/java/bbmap.jar jgi.BBDuk in=SRR33800281.trimmed.fastq out=SRR33800281.cleaned.fastq ref=adapters.fa ktrim=r k=23 mink=11 hdist=1 qtrim=r trimq=20 maq=20 stats=bbduk_stats.txt
+Executing jgi.BBDuk [in=SRR33800281.trimmed.fastq, out=SRR33800281.cleaned.fastq, ref=adapters.fa, ktrim=r, k=23, mink=11, hdist=1, qtrim=r, trimq=20, maq=20, stats=bbduk_stats.txt]
+Version 39.06
+
+maskMiddle was disabled because useShortKmers=true
+0.015 seconds.
+Initial:
+Memory: max=3217m, total=3217m, free=3183m, used=34m
+
+Added 217135 kmers; time:       0.045 seconds.
+Memory: max=3217m, total=3217m, free=3175m, used=42m
+
+Input is being processed as unpaired
+Started output streams: 0.010 seconds.
+Processing time:                16.814 seconds.
+
+Input:                          9020701 reads           454775892 bases.
+QTrimmed:                       2008284 reads (22.26%)  22109517 bases (4.86%)
+KTrimmed:                       2469235 reads (27.37%)  92263161 bases (20.29%)
+Low quality discards:           91853 reads (1.02%)     3247503 bases (0.71%)
+Total Removed:                  1115441 reads (12.37%)  117620181 bases (25.86%)
+Result:                         7905260 reads (87.63%)  337155711 bases (74.14%)
+
+Time:                           16.878 seconds.
+Reads Processed:       9020k    534.45k reads/sec
+Bases Processed:        454m    26.94m bases/sec
+```
+
+### ✅ BBduk Cleaning Summary
+
+| Metric                    | Result             |
+|---------------------------|--------------------|
+| **Total input reads**     | 9,020,701          |
+| **Reads retained**        | 7,905,260 (87.63%) |
+| **Reads removed**         | 1,115,441 (12.37%) |
+| **Adapter-trimmed reads** | 2,469,235 (27.37%) |
+| **Quality-trimmed reads** | 2,008,284 (22.26%) |
+| **Low-quality discards**  | 91,853 (1.02%)     |
+
+### 🔍 Interpretation:
+
+-   **Adapter trimming worked**: Even though `fastp` didn’t detect adapters, BBduk found and removed them from \~27% of reads.
+
+-   **Quality trimming improved base quality**: \~22% of reads had low-quality tails trimmed.
+
+-   **Final cleaned FASTQ**: `SRR33800281.cleaned.fastq` is now adapter-free, quality-filtered, and ready for quantification.
+
+## 🧪 Next Step: Re-run FastQC (Optional but Recommended)
+
+To confirm improvements:
+
+``` bash
+fastqc SRR33800281.cleaned.fastq -o fastqc_output/ 
+```
+
+## 🚀 Ready for Quantification
+
+You can now proceed with:
+
+-   **Salmon quantification** using `transcripts.idx`
+
+-   Or **STAR alignment + featureCounts** using `gencode.v43.annotation.gtf.gz`
+
+Check what do we have now
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ tree
+.
+├── data
+│   ├── SRR33800281.cleaned.fastq
+│   ├── SRR33800281.fastq
+│   ├── SRR33800281.sra
+│   ├── SRR33800281.trimmed.fastq
+│   ├── SRR33800281_fastqc.html
+│   ├── SRR33800281_fastqc.zip
+│   ├── adapters.fa
+│   ├── bbduk_stats.txt
+│   ├── fastp.html
+│   ├── fastp.json
+│   └── fastq
+└── reference
+    ├── GRCh38_index.1.ebwt
+    ├── GRCh38_index.2.ebwt
+    ├── GRCh38_index.3.ebwt
+    ├── GRCh38_index.4.ebwt
+    ├── GRCh38_index.rev.1.ebwt
+    ├── GRCh38_index.rev.2.ebwt
+    ├── Homo_sapiens.GRCh38.dna.primary_assembly.fa
+    ├── data
+    ├── fastp.json
+    ├── gencode.v43.annotation.gtf.gz
+    ├── gencode.v43.transcripts.fa.gz
+    ├── hsa.gff3
+    ├── run_pipeline.sh
+    ├── subread-2.0.3-Linux-x86_64
+    │   ├── LICENSE
+    │   ├── README.txt
+    │   ├── annotation
+    │   │   ├── hg19_RefSeq_exon.txt
+    │   │   ├── hg38_RefSeq_exon.txt
+    │   │   ├── mm10_RefSeq_exon.txt
+    │   │   └── mm9_RefSeq_exon.txt
+    │   ├── bin
+    │   │   ├── exactSNP
+    │   │   ├── featureCounts
+    │   │   ├── subindel
+    │   │   ├── subjunc
+    │   │   ├── sublong
+    │   │   ├── subread-align
+    │   │   ├── subread-buildindex
+    │   │   └── utilities
+    │   │       ├── detectionCall
+    │   │       ├── flattenGTF
+    │   │       ├── genRandomReads
+    │   │       ├── propmapped
+    │   │       ├── qualityScores
+    │   │       ├── removeDup
+    │   │       ├── repair
+    │   │       ├── subread-fullscan
+    │   │       └── txUnique
+    │   ├── doc
+    │   │   ├── SubreadUsersGuide.pdf
+    │   │   └── SubreadUsersGuide.tex
+    │   └── test
+    │       ├── chr901.fa
+    │       ├── exactSNP
+    │       │   ├── data
+    │       │   │   └── test-in.BAM
+    │       │   └── exactSNP-test.sh
+    │       ├── featureCounts
+    │       │   ├── data
+    │       │   │   ├── across_genes.gtf
+    │       │   │   ├── across_genes_r1.bam
+    │       │   │   ├── across_genes_r1.bam.ora
+    │       │   │   ├── across_genes_r1.sam
+    │       │   │   ├── across_genes_r1.sam.ora
+    │       │   │   ├── across_genes_r2.bam
+    │       │   │   ├── across_genes_r2.bam.ora
+    │       │   │   ├── across_genes_r2.sam
+    │       │   │   ├── across_genes_r2.sam.ora
+    │       │   │   ├── across_intron.gtf
+    │       │   │   ├── across_intron_r1.bam
+    │       │   │   ├── across_intron_r1.bam.ora
+    │       │   │   ├── across_intron_r1.sam
+    │       │   │   ├── across_intron_r1.sam.ora
+    │       │   │   ├── across_intron_r2.bam
+    │       │   │   ├── across_intron_r2.bam.ora
+    │       │   │   ├── across_intron_r2.sam
+    │       │   │   ├── across_intron_r2.sam.ora
+    │       │   │   ├── compare.sh
+    │       │   │   ├── corner-BINS.SAF
+    │       │   │   ├── corner-BINS.sam
+    │       │   │   ├── corner-BothEnds.ora
+    │       │   │   ├── corner-Chimeric.ora
+    │       │   │   ├── corner-DoNotSort.ora
+    │       │   │   ├── corner-EXON-ONLY.ora
+    │       │   │   ├── corner-Extend3.ora
+    │       │   │   ├── corner-Extend5.ora
+    │       │   │   ├── corner-Fraction.ora
+    │       │   │   ├── corner-INDEL.ora
+    │       │   │   ├── corner-INDEL.sam
+    │       │   │   ├── corner-IgnoreDup.ora
+    │       │   │   ├── corner-JUNC-ONLY.ora
+    │       │   │   ├── corner-JUNC.ora
+    │       │   │   ├── corner-JUNC.sam
+    │       │   │   ├── corner-Jcounts-FA.ora
+    │       │   │   ├── corner-Jcounts-FA.ora.jcounts
+    │       │   │   ├── corner-Jcounts.ora
+    │       │   │   ├── corner-Jcounts.ora.jcounts
+    │       │   │   ├── corner-LargestOverlap.ora
+    │       │   │   ├── corner-MaxOPs.ora
+    │       │   │   ├── corner-MinMAPQ.ora
+    │       │   │   ├── corner-MinOverlap.ora
+    │       │   │   ├── corner-MultiMapping.ora
+    │       │   │   ├── corner-NH-PM.ora
+    │       │   │   ├── corner-NH.ora
+    │       │   │   ├── corner-NH.sam
+    │       │   │   ├── corner-ONEEND-BOTH.ora
+    │       │   │   ├── corner-ONEEND.ora
+    │       │   │   ├── corner-ONEEND.sam
+    │       │   │   ├── corner-PEdist.ora
+    │       │   │   ├── corner-Read2Pos3.ora
+    │       │   │   ├── corner-Read2Pos5.ora
+    │       │   │   ├── corner-fractions.SAF
+    │       │   │   ├── corner-fractions.ora
+    │       │   │   ├── corner-fractions.sam
+    │       │   │   ├── corner-reduction.sam
+    │       │   │   ├── intron_between.bam
+    │       │   │   ├── intron_between.bam.ora
+    │       │   │   ├── intron_between.gtf
+    │       │   │   ├── intron_between.sam
+    │       │   │   ├── intron_between.sam.ora
+    │       │   │   ├── intron_between_nointron.bam
+    │       │   │   ├── intron_between_nointron.bam.ora
+    │       │   │   ├── intron_between_nointron.sam
+    │       │   │   ├── intron_between_nointron.sam.ora
+    │       │   │   ├── test-chralias.GTF
+    │       │   │   ├── test-chralias.SAF
+    │       │   │   ├── test-chralias.ora
+    │       │   │   ├── test-chralias.sam
+    │       │   │   ├── test-chralias.txt
+    │       │   │   ├── test-chrname.SAF
+    │       │   │   ├── test-chrname.ora
+    │       │   │   ├── test-chrname.sam
+    │       │   │   ├── test-dup.sam
+    │       │   │   ├── test-fracOverlap.ora
+    │       │   │   ├── test-fracOverlap.sam
+    │       │   │   ├── test-junc.sam
+    │       │   │   ├── test-minimum-35ext.ora
+    │       │   │   ├── test-minimum-3ext.ora
+    │       │   │   ├── test-minimum-5ext.ora
+    │       │   │   ├── test-minimum-5reduce.ora
+    │       │   │   ├── test-minimum-FL.ora
+    │       │   │   ├── test-minimum-O.ora
+    │       │   │   ├── test-minimum-PE.ora
+    │       │   │   ├── test-minimum-SE.ora
+    │       │   │   ├── test-minimum-STR.ora
+    │       │   │   ├── test-minimum-UNSTR.ora
+    │       │   │   ├── test-minimum-dup.ora
+    │       │   │   ├── test-minimum.GTF
+    │       │   │   ├── test-minimum.SAF
+    │       │   │   ├── test-minimum.bam
+    │       │   │   ├── test-minimum.ora
+    │       │   │   └── test-minimum.sam
+    │       │   ├── featureCounts-test.sh
+    │       │   ├── test_chr_aliases.sh
+    │       │   ├── test_chr_inference.sh
+    │       │   ├── test_commonusage.sh
+    │       │   ├── test_corner_cases.sh
+    │       │   ├── test_featurelevel.sh
+    │       │   └── test_minimal_example.sh
+    │       ├── subjunc
+    │       │   ├── data
+    │       │   │   ├── junction-reads-A.fq
+    │       │   │   └── junction-reads-B.fq
+    │       │   └── subjunc-test.sh
+    │       ├── subread-align
+    │       │   ├── data
+    │       │   │   ├── cigar-test-1.fq
+    │       │   │   ├── cigar-test-2.fq
+    │       │   │   ├── indel-test1.fq
+    │       │   │   ├── indel-test2.fq
+    │       │   │   ├── subfusion_test.fa
+    │       │   │   ├── subfusion_test2.fa
+    │       │   │   ├── test-err-mut-r1.fq.gz
+    │       │   │   ├── test-err-mut-r2.fq.gz
+    │       │   │   ├── test-error-r1.fq
+    │       │   │   ├── test-error-r2.fq
+    │       │   │   ├── test-noerror-r1.fq
+    │       │   │   └── test-noerror-r2.fq
+    │       │   ├── gmon.out
+    │       │   ├── readname_cigar_match.py
+    │       │   ├── readname_ora_match.py
+    │       │   └── subread-align-test.sh
+    │       └── test_all.sh
+    ├── transcripts.idx
+    └── transcripts_to_genes.txt
+
+19 directories, 171 files
+```
+
+------------------------------------------------------------------------
+
+# 😍Quanlification
+
+## 🧬 Step 1: Salmon Quantification (Single-End)
+
+### ✅ What I Have
+
+-   Cleaned FASTQ: `data/SRR33800281.cleaned.fastq`
+
+-   Salmon index: `reference/transcripts.idx`
+
+-   Transcript-to-gene map: `reference/transcripts_to_genes.txt`
+
+### ✅ Required Input
+
+-   Transcriptome FASTA: `reference/gencode.v43.transcripts.fa.gz`
+
+### 🔧 Command to Build Index
+
+```         
+salmon index -t gencode.v43.transcripts.fa.gz \
+  -i transcripts.idx \
+  -p 8
+```
+
+-   `-t`: transcriptome FASTA
+
+-   `-i`: output index directory
+
+-   `-p 8`: number of threads
+
+This will generate a complete index, including `versionInfo.json`, `refseq.bin`, and other required files.
+
+``` bash
+[Step 1 of 4] : counting k-mers
+[2025-10-26 14:42:40.553] [puff::index::jointLog] [warning] It appears that this may be a GENCODE transcriptome (from analyzing the separators in the FASTA header).  However, you have not set '|' as a header separator.  If this is a GENCODE transcriptome, consider passing --gencode to the pufferfish index command.
+
+
+[2025-10-26 14:42:40.810] [puff::index::jointLog] [warning] Entry with header [ENST00000682202.1|ENSG00000243480.8|OTTHUMG00000011023.3|-|AMY2A-204|AMY2A|19|protein_coding_CDS_not_defined|], had length less than equal to the k-mer length of 31 (perhaps after poly-A clipping)
+...
+...
+[2025-10-26 14:42:47.986] [puff::index::jointLog] [info] Replaced 4 non-ATCG nucleotides
+[2025-10-26 14:42:47.986] [puff::index::jointLog] [info] Clipped poly-A tails from 2020 transcripts
+wrote 252004 cleaned references
+[2025-10-26 14:42:53.382] [puff::index::jointLog] [info] Filter size not provided; estimating from number of distinct k-mers
+[2025-10-26 14:43:00.035] [puff::index::jointLog] [info] ntHll estimated 148705018 distinct k-mers, setting filter size to 2^32
+Threads = 8
+Vertex length = 31
+Hash functions = 5
+Filter size = 4294967296
+Capacity = 2
+Files:
+transcripts.idx/ref_k31_fixed.fa
+--------------------------------------------------------------------------------
+Round 0, 0:4294967296
+Pass    Filling Filtering
+1       12      48
+2       26      0
+True junctions count = 1034890
+False junctions count = 263792
+Hash table size = 1298682
+Candidate marks count = 10558387
+--------------------------------------------------------------------------------
+Reallocating bifurcations time: 0
+True marks count: 10264306
+Edges construction time: 29
+--------------------------------------------------------------------------------
+Distinct junctions = 1034890
+
+TwoPaCo::buildGraphMain:: allocated with scalable_malloc; freeing.
+TwoPaCo::buildGraphMain:: Calling scalable_allocation_command(TBBMALLOC_CLEAN_ALL_BUFFERS, 0);
+allowedIn: 151
+Max Junction ID: 1194132
+seen.size():9553065 kmerInfo.size():1194133
+approximateContigTotalLength: 104423435
+counters for complex kmers:
+(prec>1 & succ>1)=81976 | (succ>1 & isStart)=1226 | (prec>1 & isEnd)=1275 | (isStart & isEnd)=107
+contig count: 1578058 element count: 197628977 complex nodes: 84584
+# of ones in rank vector: 1578057
+[2025-10-26 14:45:18.697] [puff::index::jointLog] [info] Starting the Pufferfish indexing by reading the GFA binary file.
+[2025-10-26 14:45:18.697] [puff::index::jointLog] [info] Setting the index/BinaryGfa directory transcripts.idx
+size = 197628977
+-----------------------------------------
+| Loading contigs | Time = 139.65 ms
+-----------------------------------------
+size = 197628977
+-----------------------------------------
+| Loading contig boundaries | Time = 68.71 ms
+-----------------------------------------
+Number of ones: 1578057
+Number of ones per inventory item: 512
+Inventory entries filled: 3083
+1578057
+[2025-10-26 14:45:19.089] [puff::index::jointLog] [info] Done wrapping the rank vector with a rank9sel structure.
+[2025-10-26 14:45:19.097] [puff::index::jointLog] [info] contig count for validation: 1578057
+[2025-10-26 14:45:20.654] [puff::index::jointLog] [info] Total # of Contigs : 1578057
+[2025-10-26 14:45:20.654] [puff::index::jointLog] [info] Total # of numerical Contigs : 1578057
+[2025-10-26 14:45:20.710] [puff::index::jointLog] [info] Total # of contig vec entries: 10360959
+[2025-10-26 14:45:20.710] [puff::index::jointLog] [info] bits per offset entry 24
+[2025-10-26 14:45:20.926] [puff::index::jointLog] [info] Done constructing the contig vector. 1578058
+[2025-10-26 14:45:25.529] [puff::index::jointLog] [info] # segments = 1578057
+[2025-10-26 14:45:25.529] [puff::index::jointLog] [info] total length = 197628977
+[2025-10-26 14:45:25.673] [puff::index::jointLog] [info] Reading the reference files ...
+[2025-10-26 14:45:33.604] [puff::index::jointLog] [info] positional integer width = 28
+[2025-10-26 14:45:33.604] [puff::index::jointLog] [info] seqSize = 197628977
+[2025-10-26 14:45:33.604] [puff::index::jointLog] [info] rankSize = 197628977
+[2025-10-26 14:45:33.604] [puff::index::jointLog] [info] edgeVecSize = 0
+[2025-10-26 14:45:33.604] [puff::index::jointLog] [info] num keys = 150287267
+for info, total work write each  : 2.331    total work inram from level 3 : 4.322  total work raw : 25.000
+[Building BooPHF]  100  %   elapsed:   0 min 7  sec   remaining:   0 min 0  sec
+Bitarray       787462912  bits (100.00 %)   (array + ranks )
+final hash             0  bits (0.00 %) (nb in final hash 0)
+[2025-10-26 14:45:41.166] [puff::index::jointLog] [info] mphf size = 93.8729 MB
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk size = 24703623
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 0 = [0, 24703623)
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 1 = [24703623, 49407246)   
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 2 = [49407246, 74110869)   
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 3 = [74110869, 98814492)   
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 4 = [98814492, 123518115)  
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 5 = [123518115, 148221738) 
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 6 = [148221738, 172925374) 
+[2025-10-26 14:45:41.431] [puff::index::jointLog] [info] chunk 7 = [172925374, 197628947) 
+[2025-10-26 14:45:46.268] [puff::index::jointLog] [info] finished populating pos vector
+[2025-10-26 14:45:46.268] [puff::index::jointLog] [info] writing index components
+[2025-10-26 14:45:48.094] [puff::index::jointLog] [info] finished writing dense pufferfish index
+[2025-10-26 14:45:48.171] [jLog] [info] done building index
+```
+
+## 🧬 Step 2: Run Salmon Quantification
+
+### ✅ Command:
+
+``` bash
+salmon quant -i reference/transcripts.idx \
+  -l A -r data/SRR33800281.cleaned.fastq \
+  -p 8 --validateMappings \
+  -o data/salmon_quant
+```
+
+-   `-i`: path to your newly built index
+
+-   `-r`: cleaned single-end FASTQ file
+
+-   `-l A`: autodetect library type
+
+-   `--validateMappings`: improves alignment accuracy
+
+-   `-o`: output folder for quantification results
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ salmon quant -i reference/transcripts.idx \
+  -l A -r data/SRR33800281.cleaned.fastq \
+  -p 8 --validateMappings \
+  -o data/salmon_quant
+### salmon (selective-alignment-based) v1.10.2
+### [ program ] => salmon
+### [ command ] => quant
+### [ index ] => { reference/transcripts.idx }
+### [ libType ] => { A }
+### [ unmatedReads ] => { data/SRR33800281.cleaned.fastq }
+### [ threads ] => { 8 }
+### [ validateMappings ] => { }
+### [ output ] => { data/salmon_quant }
+Logs will be written to data/salmon_quant/logs
+[2025-10-26 14:53:43.621] [jointLog] [info] setting maxHashResizeThreads to 8
+[2025-10-26 14:53:43.621] [jointLog] [info] Fragment incompatibility prior below threshold.  Incompatible fragments will be ignored.
+[2025-10-26 14:53:43.621] [jointLog] [info] Usage of --validateMappings implies use of minScoreFraction. Since not explicitly specified, it is being set to 0.65
+[2025-10-26 14:53:43.621] [jointLog] [info] Setting consensusSlack to selective-alignment default of 0.35.
+[2025-10-26 14:53:43.621] [jointLog] [info] parsing read library format
+[2025-10-26 14:53:43.621] [jointLog] [info] There is 1 library.
+[2025-10-26 14:53:43.630] [jointLog] [info] Loading pufferfish index
+[2025-10-26 14:53:43.633] [jointLog] [info] Loading dense pufferfish index.
+-----------------------------------------
+| Loading contig table | Time = 1.3939 s
+-----------------------------------------
+size = 1578058
+-----------------------------------------
+| Loading contig offsets | Time = 25.181 ms
+-----------------------------------------
+-----------------------------------------
+| Loading reference lengths | Time = 3.488 ms
+-----------------------------------------
+-----------------------------------------
+| Loading mphf table | Time = 313.52 ms
+-----------------------------------------
+size = 197628977
+Number of ones: 1578057
+Number of ones per inventory item: 512
+Inventory entries filled: 3083
+-----------------------------------------
+| Loading contig boundaries | Time = 270.64 ms
+-----------------------------------------
+size = 197628977
+-----------------------------------------
+| Loading sequence | Time = 167.13 ms
+-----------------------------------------
+size = 150287267
+-----------------------------------------
+| Loading positions | Time = 1.7334 s
+-----------------------------------------
+size = 436596891
+-----------------------------------------
+| Loading reference sequence | Time = 362.33 ms
+-----------------------------------------
+-----------------------------------------
+| Loading reference accumulative lengths | Time = 6.7478 ms
+-----------------------------------------
+
+[2025-10-26 14:53:48.412] [jointLog] [info] done
+[2025-10-26 14:53:48.504] [jointLog] [info] Index contained 252045 targets
+[2025-10-26 14:53:48.572] [jointLog] [info] Number of decoys : 0
+[2025-10-26 14:53:48.757] [jointLog] [info] Automatically detected most likely library type as SF
+processed 7500000 fragments
+hits: 18729798; hits per frag:  2.50231
+
+
+
+[2025-10-26 14:54:07.124] [jointLog] [info] Thread saw mini-batch with a maximum of 9.76% zero probability fragments
+[2025-10-26 14:54:07.137] [jointLog] [info] Thread saw mini-batch with a maximum of 10.10% zero probability fragments
+[2025-10-26 14:54:07.157] [jointLog] [info] Thread saw mini-batch with a maximum of 9.38% zero probability fragments
+[2025-10-26 14:54:07.162] [jointLog] [info] Thread saw mini-batch with a maximum of 9.66% zero probability fragments
+[2025-10-26 14:54:07.173] [jointLog] [info] Thread saw mini-batch with a maximum of 9.58% zero probability fragments
+[2025-10-26 14:54:07.185] [jointLog] [info] Thread saw mini-batch with a maximum of 9.72% zero probability fragments
+[2025-10-26 14:54:07.209] [jointLog] [info] Thread saw mini-batch with a maximum of 9.82% zero probability fragments
+[2025-10-26 14:54:07.219] [jointLog] [info] Thread saw mini-batch with a maximum of 9.78% zero probability fragments
+[2025-10-26 14:54:07.254] [jointLog] [info] Computed 60701 rich equivalence classes for further processing
+[2025-10-26 14:54:07.254] [jointLog] [info] Counted 2418553 total reads in the equivalence classes
+[2025-10-26 14:54:07.257] [jointLog] [warning] 20.6746% of fragments were shorter than the k used to build the index.
+If this fraction is too large, consider re-building the index with a smaller k.
+The minimum read size found was 10.
+
+
+[2025-10-26 14:54:07.257] [jointLog] [info] Number of mappings discarded because of alignment score : 16620419
+[2025-10-26 14:54:07.257] [jointLog] [info] Number of fragments entirely discarded because of alignment score : 243337
+[2025-10-26 14:54:07.257] [jointLog] [info] Number of fragments discarded because they are best-mapped to decoys : 0
+[2025-10-26 14:54:07.257] [jointLog] [info] Number of fragments discarded because they have only dovetail (discordant) mappings to valid targets : 0
+[2025-10-26 14:54:07.262] [jointLog] [warning] Only 2418553 fragments were mapped, but the number of burn-in fragments was set to 5000000.
+The effective lengths have been computed using the observed mappings.
+
+[2025-10-26 14:54:07.262] [jointLog] [info] Mapping rate = 30.5942%
+
+[2025-10-26 14:54:07.262] [jointLog] [info] finished quantifyLibrary()
+[2025-10-26 14:54:07.265] [jointLog] [info] Starting optimizer
+[2025-10-26 14:54:07.315] [jointLog] [info] Marked 0 weighted equivalence classes as degenerate
+[2025-10-26 14:54:07.321] [jointLog] [info] iteration = 0 | max rel diff. = 911.805       
+[2025-10-26 14:54:07.876] [jointLog] [info] iteration = 100 | max rel diff. = 8.72584
+[2025-10-26 14:54:08.434] [jointLog] [info] iteration = 200 | max rel diff. = 4.62961
+[2025-10-26 14:54:08.965] [jointLog] [info] iteration = 300 | max rel diff. = 1.59963
+[2025-10-26 14:54:09.503] [jointLog] [info] iteration = 400 | max rel diff. = 0.303506
+[2025-10-26 14:54:10.026] [jointLog] [info] iteration = 500 | max rel diff. = 0.170545
+[2025-10-26 14:54:10.538] [jointLog] [info] iteration = 600 | max rel diff. = 0.113732
+[2025-10-26 14:54:11.050] [jointLog] [info] iteration = 700 | max rel diff. = 0.265483
+[2025-10-26 14:54:11.529] [jointLog] [info] iteration = 794 | max rel diff. = 0.00526755
+[2025-10-26 14:54:11.535] [jointLog] [info] Finished optimizer
+[2025-10-26 14:54:11.535] [jointLog] [info] writing output
+```
+
+Here is an explanation of the key messages and what they mean for your analysis:
+
+## 1. Fragmentation and Indexing Warning
+
+```         
+[jointLog] [warning] 20.6746% of fragments were shorter than the k used to build the index. If this fraction is too large, consider re-building the index with a smaller k. The minimum read size found was 10. 
+```
+
+-   **What it means:** The quantification tool builds a k-mer index using a specific length, **k** (e.g., $k=31$). This warning states that over $20\%$ of your sequencing fragments (reads or read pairs) are **shorter** than the k-mer length used to create the index. The shortest read found was $10$ bases.
+
+-   **The problem:** Fragments shorter than $k$ cannot be used for pseudoalignment, leading to a loss of data. This high percentage ($\sim 20\%$) is a direct consequence of the low-quality reads (specifically the very short reads) that remained after your initial upstream trimming/QC steps.
+
+-   **Recommendation:** If you accept this loss, you can proceed. However, for a more accurate result, you should **re-build the index with a smaller** $k$ (if the tool allows) to utilize more of your fragments. Alternatively, you could try **more aggressive filtering** of short reads (e.g., discard anything $< 30$ bases) *before* running quantification.
+
+## 2. Mapping and Fragment Discards
+
+```         
+[jointLog] [info] Number of mappings discarded because of alignment score : 16620419 [jointLog] [info] Number of fragments entirely discarded because of alignment score : 243337 ... [jointLog] [info] Mapping rate = 30.5942% 
+```
+
+-   **Mapping Discarded:** Over $16$ million potential mappings were discarded because their alignment quality score was too low (i.e., too many mismatches/errors) to be trusted. This is a common internal filter.
+
+-   **Fragments Discarded:** $243,337$ entire sequencing fragments (reads) were discarded because *all* of their potential mappings had poor alignment scores. These are very low-quality fragments.
+
+-   **Mapping Rate:** The final crucial number is the $30.5942\%$ Mapping rate.
+
+    -   **Interpretation:** This is **quite low** for an RNA-seq experiment. A good RNA-seq experiment using pseudoalignment (like Kallisto) on a well-prepared reference should typically yield a mapping rate of $\mathbf{60-85\%}$ (or higher).
+
+    -   **The cause:** This low rate is likely due to the quality issues seen in your earlier FastQC report (low base quality, adapter contamination, and/or short fragments). A large proportion of reads failed to align because they were too short, too poor quality, or contained non-transcriptomic sequences (like adapters).
+
+## 3. Burn-in Warning and Optimizer
+
+```         
+[jointLog] [warning] Only 2418553 fragments were mapped, but the number of burn-in fragments was set to 5000000. The effective lengths have been computed using the observed mappings. 
+```
+
+-   **What it means:** The quantification tool uses a procedure (often called "burn-in") to estimate parameters like the mean and standard deviation of the fragment length distribution. It expected to use $5$ million mapped fragments for this estimate but only found $2.4$ million available to map.
+
+-   **Effect:** The tool simply used the available $2.4$ million mapped fragments to compute the necessary parameters. This is a technical warning and does not necessarily invalidate the result, but it confirms the overall low yield of mappable d
+
+## 🧪 Validate Output
+
+After it runs:
+
+``` bash
+ls data/salmon_quant 
+```
+
+You should see:
+
+-   `quant.sf`
+
+-   `lib_format_counts.json`
+
+-   `cmd_info.json`
+
+-   `aux_info/` folder
+
+## 🧾 What You Have Now
+
+The file `data/salmon_quant/quant.sf` contains **transcript-level** quantification. It includes:
+
+| Column            | Description                                           |
+|----------------------|--------------------------------------------------|
+| `Name`            | Transcript ID (e.g., ENST00000...)                    |
+| `Length`          | Transcript length                                     |
+| `EffectiveLength` | Adjusted length used in quant                         |
+| `TPM`             | Transcripts Per Million (normalized expression)       |
+| `NumReads`        | Estimated number of reads assigned to this transcript |
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ head -20 data/salmon_quant/quant.sf
+Name    Length  EffectiveLength TPM     NumReads
+ENST00000456328.2|ENSG00000290825.1|-|OTTHUMT00000362751.1|DDX11L2-202|DDX11L2|1657|lncRNA|       1657    1407.000        0.000000        0.000
+ENST00000450305.2|ENSG00000223972.6|OTTHUMG00000000961.2|OTTHUMT00000002844.2|DDX11L1-201|DDX11L1|632|transcribed_unprocessed_pseudogene| 632     382.000 0.000000        0.000     
+ENST00000488147.1|ENSG00000227232.5|OTTHUMG00000000958.1|OTTHUMT00000002839.1|WASH7P-201|WASH7P|1351|unprocessed_pseudogene|      1351    1101.000        0.000000        0.000     
+ENST00000619216.1|ENSG00000278267.1|-|-|MIR6859-1-201|MIR6859-1|68|miRNA|       68      2.848     0.000000        0.000
+ENST00000473358.1|ENSG00000243485.5|OTTHUMG00000000959.2|OTTHUMT00000002840.1|MIR1302-2HG-202|MIR1302-2HG|712|lncRNA|     712     462.000 0.000000        0.000
+ENST00000469289.1|ENSG00000243485.5|OTTHUMG00000000959.2|OTTHUMT00000002841.2|MIR1302-2HG-201|MIR1302-2HG|535|lncRNA|     535     285.000 0.000000        0.000
+ENST00000607096.1|ENSG00000284332.1|-|-|MIR1302-2-201|MIR1302-2|138|miRNA|      138     4.663     0.000000        0.000
+ENST00000417324.1|ENSG00000237613.2|OTTHUMG00000000960.1|OTTHUMT00000002842.1|FAM138A-201|FAM138A|1187|lncRNA|    1187    937.000 0.000000        0.000
+ENST00000461467.1|ENSG00000237613.2|OTTHUMG00000000960.1|OTTHUMT00000002843.1|FAM138A-202|FAM138A|590|lncRNA|     590     340.000 0.000000        0.000
+ENST00000606857.1|ENSG00000268020.3|OTTHUMG00000185779.1|OTTHUMT00000471235.1|OR4G4P-201|OR4G4P|840|unprocessed_pseudogene|       840     590.000 0.000000        0.000
+ENST00000642116.1|ENSG00000290826.1|-|OTTHUMT00000492680.1|ENST00000642116|ENSG00000290826|1414|lncRNA|   1414    1164.000        0.000000        0.000
+ENST00000492842.2|ENSG00000240361.3|OTTHUMG00000001095.3|OTTHUMT00000003224.3|OR4G11P-201|OR4G11P|939|transcribed_unprocessed_pseudogene| 939     689.000 0.000000        0.000     
+ENST00000641515.2|ENSG00000186092.7|OTTHUMG00000001094.4|OTTHUMT00000003223.4|OR4F5-201|OR4F5|2618|protein_coding|        2618    2368.000        0.000000        0.000
+ENST00000466430.5|ENSG00000238009.6|OTTHUMG00000001096.2|OTTHUMT00000003225.1|ENST00000466430|ENSG00000238009|2748|lncRNA|        2748    2498.000        0.000000        0.000     
+ENST00000477740.5|ENSG00000238009.6|OTTHUMG00000001096.2|OTTHUMT00000003688.1|ENST00000477740|ENSG00000238009|491|lncRNA| 491     241.000 0.000000        0.000
+ENST00000471248.1|ENSG00000238009.6|OTTHUMG00000001096.2|OTTHUMT00000003687.1|ENST00000471248|ENSG00000238009|629|lncRNA| 629     379.000 0.000000        0.000
+ENST00000610542.1|ENSG00000238009.6|OTTHUMG00000001096.2|-|ENST00000610542|ENSG00000238009|723|lncRNA|    723     473.000 0.000000        0.000
+ENST00000453576.2|ENSG00000238009.6|OTTHUMG00000001096.2|OTTHUMT00000003689.1|ENST00000453576|ENSG00000238009|336|lncRNA| 336     86.025  0.000000        0.000
+ENST00000495576.1|ENSG00000239945.1|OTTHUMG00000001097.2|OTTHUMT00000003226.2|ENST00000495576|ENSG00000239945|1319|lncRNA|        1319    1069.000        0.000000        0.000   
+```
+
+## 🔍 Step 1: View and Sort `quant.sf`
+
+You can preview the file and sort by TPM or read count using:
+
+``` bash
+# View top 10 transcripts by TPM
+sort -k4,4nr data/salmon_quant/quant.sf | head
+
+# View top 10 transcripts by read count
+sort -k5,5nr data/salmon_quant/quant.sf | head
+```
+
+This shows the most highly expressed transcripts.
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ # View top 10 transcripts by TPM
+sort -k4,4nr data/salmon_quant/quant.sf | head
+
+# View top 10 transcripts by read count
+sort -k5,5nr data/salmon_quant/quant.sf | head
+ENST00000361851.1|ENSG00000228253.1|-|-|MT-ATP8-201|MT-ATP8|207|protein_coding| 207     9.766     183885.307636   13761.711
+ENST00000384147.1|ENSG00000276788.1|-|-|SNORD26-201|SNORD26|75|snoRNA|  75      2.971   119932.757676     2731.000
+ENST00000418539.2|ENSG00000236824.2|OTTHUMG00000151778.2|OTTHUMT00000323892.2|BCYRN1-201|BCYRN1|200|scRNA|        200     8.896   67875.743101    4627.038
+ENST00000618249.1|ENSG00000278217.1|-|-|ENST00000618249|ENSG00000278217|95|misc_RNA|    953.378   25275.995578    654.293
+ENST00000387400.1|ENSG00000210135.1|-|-|MT-TN-201|MT-TN|73|Mt_tRNA|     73      2.935   23427.816399      527.000
+ENST00000616756.1|ENSG00000273870.1|OTTHUMG00000187612.1|OTTHUMT00000475357.1|ENST00000616756|ENSG00000273870|179|processed_pseudogene|   179     6.919   19080.969722    1011.643  
+ENST00000361227.2|ENSG00000198840.2|-|-|MT-ND3-201|MT-ND3|346|protein_coding|   346     96.006    18413.370488    13546.909
+ENST00000580972.1|ENSG00000264229.1|-|-|RNU4ATAC-201|RNU4ATAC|127|snRNA|        127     4.263     17082.166747    558.000
+ENST00000387392.1|ENSG00000210127.1|-|-|MT-TA-201|MT-TA|69|Mt_tRNA|     69      2.865   14299.765873      314.000
+ENST00000387409.1|ENSG00000210144.1|-|-|MT-TY-201|MT-TY|66|Mt_tRNA|     66      2.815   12888.138754      278.000
+ENST00000387347.2|ENSG00000210082.2|-|-|MT-RNR2-201|MT-RNR2|1559|Mt_rRNA|       1559    1309.000  9255.902554     92847.000
+ENST00000619449.2|ENSG00000251562.10|OTTHUMG00000166322.5|OTTHUMT00000473534.2|MALAT1-215|MALAT1|5340|lncRNA|     5340    5090.000        793.684947      30958.177
+ENST00000362079.2|ENSG00000198938.2|-|-|MT-CO3-201|MT-CO3|784|protein_coding|   784     534.000   7497.784496     30682.000
+ENST00000389680.2|ENSG00000211459.2|-|-|MT-RNR1-201|MT-RNR1|954|Mt_rRNA|        954     704.000   3758.746236     20278.000
+ENST00000361453.3|ENSG00000198763.3|-|-|MT-ND2-201|MT-ND2|1042|protein_coding|  1042    792.000   3019.448615     18325.772
+ENST00000225964.10|ENSG00000108821.14|OTTHUMG00000148674.9|OTTHUMT00000309036.3|COL1A1-201|COL1A1|5914|protein_coding|    5914    5664.000        358.651146      15567.000
+ENST00000361899.2|ENSG00000198899.2|-|-|MT-ATP6-201|MT-ATP6|681|protein_coding| 681     431.000   4594.910239     15176.225
+ENST00000361851.1|ENSG00000228253.1|-|-|MT-ATP8-201|MT-ATP8|207|protein_coding| 207     9.766     183885.307636   13761.711
+ENST00000361227.2|ENSG00000198840.2|-|-|MT-ND3-201|MT-ND3|346|protein_coding|   346     96.006    18413.370488    13546.909
+ENST00000674681.1|ENSG00000075624.17|OTTHUMG00000023268.12|-|ACTB-219|ACTB|2554|protein_coding|   2554    2304.000        664.013157      11723.806
+```
+
+## 🧮 Step 2: Count Mapped Transcripts
+
+To count how many transcripts have non-zero expression:
+
+``` bash
+awk '$5 > 0' data/salmon_quant/quant.sf | wc -l 
+```
+
+This gives the number of transcripts with at least one read mapped.
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ awk '$5 > 0' data/salmon_quant/quant.sf | wc -l 
+20034
+```
+
+## 🎯 Your Goal
+
+You want to get **gene-level expression** (e.g., gene names + expression values like TPM or counts).
+
+## 🧬 Step-by-Step: Summarize to Gene Level with `tximport` in R
+
+### ✅ 1. Prepare the Transcript-to-Gene Map
+
+You already have:
+
+``` bash
+reference/transcripts_to_genes.txt 
+```
+
+This file should look like:
+
+``` bash
+ENST00000456328.2    DDX11L1
+ENST00000450305.2    DDX11L1
+...
+```
+
+Our current `transcripts_to_genes.txt` maps **transcript IDs (ENST...) to gene IDs (ENSG...)**, but not to **gene names** like `DDX11L1`, `ACTB`, or `GAPDH`. If you want to see **gene names** alongside expression values, you'll need to enrich this mapping.
+
+## 🧬 Generate Transcript → Gene Name Map from GTF
+
+You can extract transcript-to-gene-name mappings directly from your GTF file (`gencode.v43.annotation.gtf.gz`) using `awk` or `grep`.
+
+### ✅ Command:
+
+``` bash
+zgrep -w "transcript" reference/gencode.v43.annotation.gtf.gz | \
+awk 'BEGIN{FS="\t"; OFS="\t"} {
+  match($9, /transcript_id "([^"]+)"/, tid);
+  match($9, /gene_id "([^"]+)"/, gid);
+  match($9, /gene_name "([^"]+)"/, gname);
+  if (tid[1] && gid[1] && gname[1]) {
+    print tid[1], gid[1], gname[1]
+  }
+}' > reference/transcript_gene_name_map.txt
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ zgrep -w "transcript" reference/gencode.v43.annotation.gtf.gz | \
+awk 'BEGIN{FS="\t"; OFS="\t"} {
+  match($9, /transcript_id "([^"]+)"/, tid);
+  match($9, /gene_id "([^"]+)"/, gid);
+  match($9, /gene_name "([^"]+)"/, gname);
+  if (tid[1] && gid[1] && gname[1]) {
+    print tid[1], gid[1], gname[1]
+  }
+}' > reference/transcript_gene_name_map.txt
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ ls -lh reference/transcript_gene_name_map.txt
+-rwxrwxrwx 1 jayz jayz 11M Oct 26 15:17 reference/transcript_gene_name_map.txt
+```
+
+This will give you a 3-column file:
+
+``` bash
+ENST00000456328.2    ENSG00000290825.1    DDX11L1 ... 
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ head -20  reference/transcript_gene_name_map.txt
+ENST00000456328.2       ENSG00000290825.1       DDX11L2
+ENST00000450305.2       ENSG00000223972.6       DDX11L1
+ENST00000488147.1       ENSG00000227232.5       WASH7P
+ENST00000619216.1       ENSG00000278267.1       MIR6859-1
+ENST00000473358.1       ENSG00000243485.5       MIR1302-2HG
+ENST00000469289.1       ENSG00000243485.5       MIR1302-2HG
+ENST00000607096.1       ENSG00000284332.1       MIR1302-2
+ENST00000417324.1       ENSG00000237613.2       FAM138A
+ENST00000461467.1       ENSG00000237613.2       FAM138A
+ENST00000606857.1       ENSG00000268020.3       OR4G4P
+ENST00000642116.1       ENSG00000290826.1       ENSG00000290826
+ENST00000492842.2       ENSG00000240361.3       OR4G11P
+ENST00000641515.2       ENSG00000186092.7       OR4F5
+ENST00000466430.5       ENSG00000238009.6       ENSG00000238009
+ENST00000477740.5       ENSG00000238009.6       ENSG00000238009
+ENST00000471248.1       ENSG00000238009.6       ENSG00000238009
+ENST00000610542.1       ENSG00000238009.6       ENSG00000238009
+ENST00000453576.2       ENSG00000238009.6       ENSG00000238009
+ENST00000495576.1       ENSG00000239945.1       ENSG00000239945
+ENST00000442987.3       ENSG00000233750.3       CICP27
+```
+
+## 🧬 Create Gene Expression Table with Gene Names
+
+Here’s how to do it using command-line tools:
+
+### ✅ 1. Extract Expressed Transcripts from `quant.sf`
+
+``` bash
+awk '$5 > 0' data/salmon_quant/quant.sf > expressed_transcripts.sf 
+```
+
+This filters transcripts with non-zero read counts.
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ ls -lh expressed_transcripts.sf
+-rwxrwxrwx 1 jayz jayz 2.8M Oct 26 15:24 expressed_transcripts.sf
+```
+
+### ✅ 1. Extract Gene Name and NumReads
+
+Use `awk` to parse the pipe-delimited fields and grab:
+
+-   Field 6 → gene name
+
+-   Field 10 → NumReads
+
+``` bash
+awk -F '[|\t]' 'NR>1 {gene=$6; count=$10; expr[gene]+=count} END {for (g in expr) print g, expr[g]}' data/salmon_quant/quant.sf \
+  | sort -k2,2nr > gene_expression_named.txt
+```
+
+### 📁 Output: `gene_expression_named.txt`
+
+This file will contain:
+
+```         
+MTND1P23    11117.795 
+MTATP6P1    38.775 
+LINC00115   2.216 ... 
+```
+
+-   Column 1: Gene name
+
+-   Column 2: Total NumReads across all transcripts for that gene
+
+### ✅ 3. Summarize to Gene-Level Expression
+
+You can use `awk` to aggregate read counts per gene name:
+
+bash
+
+```         
+awk '{counts[$7] += $5} END {for (gene in counts) print gene, counts[gene]}' transcript_gene_expression.txt \
+  | sort -k2,2nr > gene_expression_summary.txt
+```
+
+This produces a table like:
+
+```         
+ACTB     12345.67 
+GAPDH    9876.54 ... 
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ ls -lh gene_expression_named.txt
+-rwxrwxrwx 1 jayz jayz 908K Oct 26 15:29 gene_expression_named.txt
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ head -10 gene_expression_named.txt
+ANK2 928276
+SNHG14 749832
+TTN 588760
+TRIM2 542233
+DYNC1H1 497569
+MAPK10 477893
+CLCC1 473194
+PCBP1-AS1 416207
+MIR99AHG 400306
+ABCC8 390247
+```
+
+------------------------------------------------------------------------
+
+## 🧬 Method 2: STAR Alignment + featureCounts
+
+This method aligns reads to the genome and counts overlaps with annotated genes. It’s especially useful for:
+
+-   Detecting novel splice junctions
+
+-   Handling complex gene models
+
+-   Comparing with transcript-based quantification
+
+## ✅ Step 1: Build STAR Genome Index
+
+You’ll need:
+
+-   Genome FASTA: `reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa`
+
+-   GTF annotation: `reference/gencode.v43.annotation.gtf.gz`
+
+### 🧠 What’s Going On
+
+STAR expects the **chromosome names in the GTF and FASTA to match exactly**. For example:
+
+-   Your FASTA (`Homo_sapiens.GRCh38.dna.primary_assembly.fa`) likely uses names like:
+
+    ```         
+    >1 
+    >2 
+    >X 
+    ```
+
+-   But your GTF (`gencode.v43.annotation.gtf`) probably uses:
+
+    ```         
+    chr1 
+    chr2 
+    chrX 
+    ```
+
+This mismatch causes STAR to fail when it can’t find matching chromosomes for exon annotations.
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ head -10 reference/gencode.v43.annotation.gtf
+##description: evidence-based annotation of the human genome (GRCh38), version 43 (Ensembl 109)
+##provider: GENCODE
+##contact: gencode-help@ebi.ac.uk
+##format: gtf
+##date: 2022-11-29
+chr1    HAVANA  gene    11869   14409   .       +       .       gene_id "ENSG00000290825.1"; gene_type "lncRNA"; gene_name "DDX11L2"; level 2; tag "overlaps_pseudogene";
+chr1    HAVANA  transcript      11869   14409   .       +       .       gene_id "ENSG00000290825.1"; transcript_id "ENST00000456328.2"; gene_type "lncRNA"; gene_name "DDX11L2"; transcript_type "lncRNA"; transcript_name "DDX11L2-202"; level 2; transcript_support_level "1"; tag "basic"; tag "Ensembl_canonical"; havana_transcript "OTTHUMT00000362751.1";     
+```
+
+## 🛠️ Fix Options
+
+### ✅ Option 1: Strip `chr` Prefix from GTF (Recommended)
+
+If your FASTA uses `1`, `2`, `X`, etc., run:
+
+bash
+
+```         
+sed 's/^chr//' reference/gencode.v43.annotation.gtf > reference/gencode.v43.annotation.nodup.gtf 
+```
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ head -10 reference/gencode.v43.annotation.nodup.gtf
+##description: evidence-based annotation of the human genome (GRCh38), version 43 (Ensembl 109)
+##provider: GENCODE
+##contact: gencode-help@ebi.ac.uk
+##format: gtf
+##date: 2022-11-29
+1       HAVANA  gene    11869   14409   .       +       .       gene_id "ENSG00000290825.1"; gene_type "lncRNA"; gene_name "DDX11L2"; level 2; tag "overlaps_pseudogene";
+1       HAVANA  transcript      11869   14409   .       +       .       gene_id "ENSG00000290825.1"; transcript_id "ENST00000456328.2"; gene_type "lncRNA"; gene_name "DDX11L2"; transcript_type "lncRNA"; transcript_name "DDX11L2-202"; level 2; transcript_support_level "1"; tag "basic"; tag "Ensembl_canonical"; havana_transcript "OTTHUMT00000362751.1";   
+```
+
+Then re-run STAR with the new GTF:
+
+``` bash
+mkdir -p reference/star_index
+
+STAR --runThreadN 8 \
+  --runMode genomeGenerate \
+  --genomeDir reference/star_index \
+  --genomeFastaFiles reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
+  --sjdbGTFfile reference/gencode.v43.annotation.nodup.gtf \
+  --sjdbOverhang 100
+```
+
+-   `sjdbOverhang`: set to read length minus 1 (e.g., 100 for 101 bp reads)
+
+It's completely **normal** that after $30$ minutes the `reference/star_index` directory still appears empty or incomplete. The **STAR genome index generation** is a process that builds several large binary files *simultaneously* and **only writes the final files to disk after the entire process is complete.**
+
+``` bash
+jayz@localhost:/mnt/d/01datawsl/bulkRNA$ STAR --runThreadN 8 \
+  --runMode genomeGenerate \
+  --genomeDir reference/star_index \
+  --genomeFastaFiles reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
+  --sjdbGTFfile reference/gencode.v43.annotation.nodup.gtf \
+  --sjdbOverhang 100
+        /usr/lib/rna-star/bin/STAR-avx2 --runThreadN 8 --runMode genomeGenerate --genomeDir reference/star_index --genomeFastaFiles reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa --sjdbGTFfile reference/gencode.v43.annotation.nodup.gtf --sjdbOverhang 100
+        STAR version: 2.7.11b   compiled: 2024-04-14T23:10:25+00:00 <place not set in Debian package>
+Oct 26 17:47:08 ..... started STAR run
+Oct 26 17:47:08 ... starting to generate Genome files
+Oct 26 17:49:05 ..... processing annotations GTF
+Oct 26 17:50:02 ... starting to sort Suffix Array. This may take a long time...
+Oct 26 17:50:09 ... sorting Suffix Array chunks and saving them to disk...
+Oct 26 19:41:47 ... loading chunks from disk, packing SA...
+terminate called after throwing an instance of 'std::bad_alloc'
+  what():  std::bad_alloc
+/usr/bin/STAR: line 7:   558 Aborted                 (core dumped) "${cmd}" "$@"
+```
+
+## ✅ Step 2: Align Reads with STAR
+
+Once the index is built, align your cleaned FASTQ:
+
+``` bash
+STAR --runThreadN 8 \
+  --genomeDir reference/star_index \
+  --readFilesIn data/SRR33800281.cleaned.fastq \
+  --outFileNamePrefix data/star_out/ \
+  --outSAMtype BAM SortedByCoordinate
+```
+
+This produces:
+
+-   `Aligned.sortedByCoord.out.bam`: sorted BAM file
+
+-   `Log.final.out`: alignment summary
+
+## ✅ Step 3: Count with featureCounts
+
+Use your BAM and GTF to count reads per gene:
+
+``` bash
+reference/subread-2.0.3-Linux-x86_64/bin/featureCounts \
+  -T 8 -t exon -g gene_id \
+  -a reference/gencode.v43.annotation.gtf.gz \
+  -o data/gene_counts_featureCounts.txt \
+  data/star_out/Aligned.sortedByCoord.out.bam
+```
+
+This gives you:
+
+-   Gene-level counts in `data/gene_counts_featureCounts.txt`
+
+###

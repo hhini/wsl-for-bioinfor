@@ -1,0 +1,1010 @@
+---
+title: 医疗大数据作业
+authors:
+  - name: 周杰 113120230073
+    affiliation: The GanNan medical University 
+    roles: writing
+    corresponding: true
+bibliography: references.bib
+---
+
+what i write is made by myself and AI , i could prove code if you want to check
+
+jayz 周杰 113120230073
+
+# Getting the data🤷
+
+Now we pick the data from TCGA, this is the [link](https://portal.gdc.cancer.gov/projects/TCGA-LUSC)
+
+**Project  项目**
+
+## **TCGA-LUSC**
+
+Total of  总计
+
+**504**Cases  案例
+
+**32,329**Files  文件
+
+[**3,770**](https://portal.gdc.cancer.gov/projects/TCGA-LUSC#annotations)Annotations  注释
+
+## **Summary  概括**
+
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Project ID  项目 ID**                   | TCGA-LUSC                                                                                   |
++===========================================+=============================================================================================+
+| **dbGaP Study Accession  dbGaP 研究加入** | [phs000178](https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs000178) |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Project Name  项目名称**                | Lung Squamous Cell Carcinoma\                                                               |
+|                                           | 肺鳞状细胞癌                                                                                |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Disease Type  疾病类型**                | -   2 Disease Types  2种疾病类型                                                            |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Primary Site  主站点**                  | Bronchus and lung  支气管和肺                                                               |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Program  程序**                         | TCGA                                                                                        |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+
+In survival analysis, it's often best to combine these stages into **broader prognostic groups** to ensure each group has enough patients and to capture the major jumps in prognosis.
+
+### Clinical Interpretation and Grouping
+
+For solid tumors like LUSC, a standard way to simplify staging for survival analysis is:
+
++----------------------+--------------------------+--------------------------------------------------------------+
+| Simplified Group     | Included Original Stages | Clinical Meaning                                             |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Early Stage**      | **I (IA, IB)**           | Locally confined tumor, best prognosis.                      |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Locally Advanced** | **II (IIA, IIB)**        | Larger tumor or spread to nearby lymph nodes.                |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Advanced Stage**   | **III (IIIA, IIIB)**     | Tumor spread to distant lymph nodes or large primary tumors. |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Metastatic**       | **IV** (If present)      | Worst prognosis (although LUSC often presents earlier).      |
++----------------------+--------------------------+--------------------------------------------------------------+
+
+and we have
+
+``` r
+--- Distribution of Simplified Stages ---
+# A tibble: 3 × 2
+  simplified_stage             n
+  <chr>                    <int>
+1 Advanced (Stage III)        84
+2 Early/Local (Stage I-II)   405
+3 Unknown                      4
+```
+
+``` r
+--- Survival Model Summary (Log-Rank Test) ---
+Call:
+survdiff(formula = surv_object ~ simplified_stage, data = survival_for_analysis)
+
+                                            N Observed Expected (O-E)^2/E (O-E)^2/V
+simplified_stage=Early/Local (Stage I-II) 405      119    127.2     0.528      2.96
+simplified_stage=Advanced (Stage III)      84       36     27.8     2.417      2.96
+
+ Chisq= 3  on 1 degrees of freedom, p= 0.09 
+ 
+```
+
+![](plot-9.png)
+
+# Get more meta data from our xml.file
+
+We're dealing with XML files that use **namespaces**, which are essential for distinguishing elements that might otherwise have the same name but come from different schemas. Here's why and how it works:
+
+### 🧠 Why we Need to Define Namespaces
+
+XML namespaces are like **last names(姓氏) for XML tags**—they prevent confusion when multiple XML vocabularies are used in the same document.
+
+#### ✅ Purpose of Namespaces
+
+-   Avoids **name collisions** between elements from different sources.
+
+-   Ensures **accurate XPath queries**—without namespaces, `lxml` won’t find elements like `<shared:bcr_patient_barcode>` because it doesn’t know what `shared:` means.
+
+-   Allows we to **target specific schemas** (e.g., clinical vs. administrative metadata).
+
+#### 🧩 Example
+
+wer XML contains:
+
+``` xml
+<shared:bcr_patient_barcode xmlns:shared="http://tcga.nci/bcr/xml/shared/2.7">TCGA-XX-XXXX</shared:bcr_patient_barcode> 
+```
+
+To extract this with XPath, we must tell `lxml` what `shared:` refers to:
+
+``` python
+root.xpath('//shared:bcr_patient_barcode', namespaces=ns) 
+```
+
+Without `namespaces=ns`, this query fails silently.
+
+### 🧬 Expanded Python XML Parser for TCGA Clinical Metadata
+
+```{python}
+from lxml import etree
+import pandas as pd
+import glob
+
+# Define namespaces
+ns = {
+    'shared': 'http://tcga.nci/bcr/xml/shared/2.7',
+    'clin_shared': 'http://tcga.nci/bcr/xml/clinical/shared/2.7',
+    'shared_stage': 'http://tcga.nci/bcr/xml/clinical/shared/stage/2.7',
+    'lung_shared': 'http://tcga.nci/bcr/xml/clinical/shared/lung/2.7',
+    'admin': 'http://tcga.nci/bcr/xml/administration/2.7'
+}
+```
+
+```{python}
+def parse_clinical_xml(file):
+    tree = etree.parse(file)
+    root = tree.getroot()
+
+    def get_text(xpath):
+        el = root.xpath(xpath, namespaces=ns)
+        return el[0].text if el else None
+
+    return {
+        'case_id': get_text('//shared:bcr_patient_barcode'),
+        'vital_status': get_text('//clin_shared:vital_status'),
+        'days_to_death': get_text('//clin_shared:days_to_death'),
+        'days_to_last_followup': get_text('//clin_shared:days_to_last_followup'),
+        'age_at_dx': get_text('//clin_shared:age_at_initial_pathologic_diagnosis'),
+        'stage': get_text('//shared_stage:pathologic_stage'),
+        'gender': get_text('//shared:gender'),
+        'tumor_status': get_text('//clin_shared:person_neoplasm_cancer_status'),
+        'smoking_history': get_text('//shared:tobacco_smoking_history'),
+        'pack_years_smoked': get_text('//clin_shared:number_pack_years_smoked'),
+        'residual_tumor': get_text('//clin_shared:residual_tumor'),
+        'ecog_score': get_text('//clin_shared:eastern_cancer_oncology_group'),
+        'radiation_therapy': get_text('//clin_shared:radiation_therapy'),
+        'primary_therapy_outcome': get_text('//clin_shared:primary_therapy_outcome_success')
+    }
+
+# Load all XML files
+xml_files = glob.glob("E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Clinical/Clinical_Supplement/**/*.xml", recursive=True)
+
+# Parse and combine
+records = [parse_clinical_xml(f) for f in xml_files]
+clinical_df = pd.DataFrame(records)
+
+# Clean numeric columns
+for col in ['days_to_death', 'days_to_last_followup', 'age_at_dx', 'pack_years_smoked']:
+    clinical_df[col] = pd.to_numeric(clinical_df[col], errors='coerce')
+
+# Preview
+print(clinical_df.head())
+print(clinical_df.describe())
+```
+
+save and load the RNA data
+
+```{python}
+#  Save clinical metadata
+clinical_outfile = r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\clinical_metadata.csv"
+clinical_df.to_csv(clinical_outfile, index=False)
+print(f"✅ Clinical metadata saved to: {clinical_outfile}")
+
+```
+
+```{python}
+clinical_outfile = r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\clinical_metadata.csv"
+clinical_df = pd.read_csv(clinical_outfile)
+# Load RNA expression matrix
+expression_file = "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/rnaexp.csv"
+expression_df = pd.read_csv(expression_file, index_col=0)
+print("✅ Expression matrix loaded. Shape:", expression_df.shape)
+
+# Optional: Preview
+print(expression_df.iloc[:5, :5])
+```
+
+Our plan for building a system to link clinical and RNA expression data! Using **PostgreSQL** for a robust, production-ready database and **DuckDB** for fast, in-process analytical queries in Python is an excellent approach.
+
+Here is the plan, starting with the necessary packages and steps to load wer data into both systems.
+
+## 📦 Package Installation
+
+First, we'll need to install the required Python packages. we already have **pandas** for data manipulation. we'll need `psycopg2-binary` (or `psycopg` for a modern, pure-Python driver) for PostgreSQL and `duckdb` for the in-process analytics database.
+
+``` bash
+# Recommended installation for the project
+pip install pandas duckdb sqlalchemy psycopg2-binary
+```
+
+### Use the postgreSQL database
+
+This Python script is designed to **load wer TCGA clinical and RNA expression data into a PostgreSQL database** so we can query and manage it efficiently. Here's a breakdown of what each part does:
+
+### 🧠 What This Code Does
+
+#### 1. **Imports Required Libraries**
+
+```{python}
+import pandas as pd
+from sqlalchemy import create_engine
+import duckdb
+import io
+```
+
+-   `pandas`: for handling DataFrames
+
+-   `sqlalchemy`: to connect to PostgreSQL
+
+-   `duckdb` and `io`: not used in this snippet, but could be for in-memory SQL or streaming later
+
+#### 2. **Defines PostgreSQL Connection Parameters**
+
+``` python
+PG_USER = "wer_user"
+PG_PASS = "wer_password"
+PG_HOST = "localhost"
+PG_PORT = "5432"
+PG_DB = "clinical_rna_db"
+```
+
+These are placeholders—we’d replace them with wer actual PostgreSQL credentials.
+
+#### 3. **Creates a SQLAlchemy Engine**
+
+``` python
+pg_engine_url = f"postgresql://{PG_USER}:{PG_PASS}@{PG_HOST}:{PG_PORT}/{PG_DB}"
+pg_engine = create_engine(pg_engine_url)
+```
+
+This sets up a connection to wer PostgreSQL database so we can send data to it.
+
+#### 4. **Prepares the Expression Data**
+
+``` python
+expression_df = expression_df.reset_index(names=['gene_name']) 
+```
+
+If `gene_name` was the index, this makes it a proper column so it can be stored in SQL.
+
+#### 5. **Loads DataFrames into PostgreSQL**
+
+``` python
+clinical_df.to_sql('clinical_metadata', pg_engine, if_exists='replace', index=False) expression_df.to_sql('rna_expression_matrix', pg_engine, if_exists='replace', index=False) 
+```
+
+-   `clinical_df` goes into a table called `clinical_metadata`
+
+-   `expression_df` goes into `rna_expression_matrix`
+
+-   `if_exists='replace'` means it will overwrite the table if it already exists
+
+#### 6. **Handles Connection Errors Gracefully**
+
+``` python
+except Exception as e:     
+    print(f"❌ Could not connect to PostgreSQL or load data: {e}") 
+```
+
+If the connection fails (e.g., wrong password, server not running), it prints a helpful error message.
+
+### 2. DuckDB Setup (In-Process, No external server needed)
+
+DuckDB runs entirely within wer Python process, making it perfect for rapid analytical queries.
+
+```{python}
+# --- 2. DuckDB Setup ---
+
+# Create an in-memory database or a file-backed one ('path/to/my.duckdb')
+con = duckdb.connect(database=':memory:', read_only=False)
+print("✅ DuckDB connection established (in-memory).")
+
+# --- Loading Data into DuckDB ---
+# DuckDB can read directly from pandas DataFrames using the 'register' function.
+
+# Register the DataFrames as temporary tables in DuckDB
+con.register('clinical_metadata_db', clinical_df)
+con.register('rna_expression_matrix_db', expression_df)
+
+print("✅ DataFrames registered as tables in DuckDB.")
+
+# --- Verification Query in DuckDB ---
+# Example: Querying the registered tables
+duckdb_query = """
+SELECT t1.case_id, t1.vital_status, t2."TSPAN6", t2."DPM1"
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_matrix_db t2
+    ON t1.case_id = t2.case_id  -- Note: we'll need to ensure case_id is a column in expression_df for a direct join!
+LIMIT 5;
+"""
+# Based on wer data structure, we might need to UNPIVOT the RNA data first in DuckDB
+# The join key is `case_id` from clinical_df and the column *names* (TCGA-...) in expression_df.
+
+print("\n--- DuckDB Verification Query (Sample) ---")
+try:
+    # A crucial step for linking is ensuring the 'case_id' column is present in the expression data.
+    # If the case IDs are the *column names*, we need to *unpivot* the expression matrix first.
+
+    # ❗ IMPORTANT: Unpivot the RNA data for easier joining
+    # This assumes the original expression_df has 'gene_name' and columns are 'TCGA-...' case IDs.
+    expression_cols = [col for col in expression_df.columns if col.startswith('TCGA-')]
+
+        # Build struct_pack list
+    structs = ', '.join([
+        f"struct_pack(case_id := '{col}', expression := \"{col}\")"
+        for col in expression_cols
+    ])
+
+    # Corrected SQL: unpack struct fields explicitly
+    unpivot_query = f"""
+    CREATE TEMP TABLE rna_expression_unpivoted AS
+    SELECT
+        gene_name,
+        s.case_id AS sample_id,
+        s.expression AS expression
+    FROM (
+        SELECT
+            gene_name,
+            unnest(list_value(
+                {', '.join([
+                    f"struct_pack(case_id := '{col}', expression := \"{col}\")"
+                    for col in expression_cols
+                ])}
+            )) AS s
+        FROM rna_expression_matrix_db
+    );
+    """
+    con.execute(unpivot_query)
+    print("✅ RNA expression matrix unpivoted and flattened.")
+
+    print("✅ RNA expression matrix unpivoted and cleaned for linking.")
+
+
+    # Now, the join is straightforward
+    linking_query = """
+    SELECT
+        t1.case_id,
+        t1.vital_status,
+        t1.age_at_dx,
+        t2.gene_name,
+        t2.sample_id,
+        t2.expression
+    FROM clinical_metadata_db t1
+    INNER JOIN rna_expression_unpivoted t2
+        ON t1.case_id = t2.sample_id
+        LIMIT 10;
+    
+    """
+    linked_data = con.execute(linking_query).fetchdf()
+    print("Successfully linked clinical and expression data (sample):")
+    print(linked_data)
+
+except Exception as e:
+    print(f"❌ DuckDB query/unpivot failed: {e}")
+```
+
+This script is a **complete local pipeline** that uses **DuckDB** to join wer TCGA clinical metadata and RNA expression matrix—without needing PostgreSQL or any external database. Here's a breakdown of what it's doing and why it's clever:
+
+``` python
+        case_id vital_status  age_at_dx gene_name     sample_id  expression
+0  TCGA-90-A4EE        Alive       53.0    TSPAN6  TCGA-90-A4EE      8.4836
+1  TCGA-85-8049        Alive       57.0    TSPAN6  TCGA-85-8049      8.9006
+2  TCGA-33-6737         None        NaN    TSPAN6  TCGA-33-6737     24.1585
+3  TCGA-39-5016        Alive       44.0    TSPAN6  TCGA-39-5016     21.0036
+4  TCGA-56-8304        Alive       73.0    TSPAN6  TCGA-56-8304     14.7462
+5  TCGA-92-8063        Alive       52.0    TSPAN6  TCGA-92-8063     11.5989
+6  TCGA-22-4593         Dead       77.0    TSPAN6  TCGA-22-4593     21.0880
+7  TCGA-43-8115        Alive       72.0    TSPAN6  TCGA-43-8115     10.2988
+8  TCGA-22-4599         Dead       73.0    TSPAN6  TCGA-22-4599     12.1437
+9  TCGA-60-2712         Dead       79.0    TSPAN6  TCGA-60-2712      5.9034
+Total unique clinical samples: 504
+```
+
+### 🧠 What This DuckDB Script Does
+
+#### ✅ 1. **Creates an In-Memory DuckDB Database**
+
+``` python
+con = duckdb.connect(database=':memory:', read_only=False)
+```
+
+-   Fast, lightweight, and no installation overhead.
+
+-   we could also use a file-backed DB by replacing `':memory:'` with a path like `'E:/acode/my_tcga.duckdb'`.
+
+#### ✅ 2. **Registers Pandas DataFrames as DuckDB Tables**
+
+``` python
+con.register('clinical_metadata_db', clinical_df) con.register('rna_expression_matrix_db', expression_df) 
+```
+
+-   These are **temporary views**—we can query them like SQL tables.
+
+-   No need to write to disk or convert formats.
+
+#### ⚠️ 3. **Unpivots the RNA Expression Matrix**
+
+``` python
+expression_cols = [f'"{col}"' for col in expression_df.columns if col.startswith('TCGA-')] 
+```
+
+-   wer expression matrix is **wide format**: genes as rows, samples as columns.
+
+-   To join with clinical data (which is long format), we **unpivot** it:
+
+    -   Each row becomes: `(gene_name, case_id, expression)`
+
+    -   This is done using DuckDB’s `unnest(list_value(...))` + `struct_pack(...)`
+
+#### 🔗 4. **Joins Clinical and Expression Data**
+
+``` sql
+SELECT
+    t1.case_id,
+    t1.vital_status,
+    t1.age_at_dx,
+    t2.gene_name,
+    t2.expression
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_unpivoted t2
+    ON t1.case_id = t2.case_id
+WHERE t2.gene_name IN ('TSPAN6', 'DPM1')
+```
+
+-   Now that both tables have a `case_id` column, we can join them directly.
+
+-   This query filters for two genes (`TSPAN6`, `DPM1`) and returns their expression values alongside clinical metadata.
+
+### ✅ Why This Is Smart
+
+-   **No PostgreSQL setup** needed—perfect for local analysis.
+
+-   **DuckDB is blazing fast** for analytical queries on tabular data.
+
+-   we can now run complex SQL joins, filters, and aggregations entirely in memory.
+
+## 🔗 The Liking/Linking Strategy
+
+The core challenge in wer data is that the two DataFrames have different structures for the common key:
+
+-   **`clinical_df`**: Has a column named `case_id` (e.g., `TCGA-85-6561`).
+
+-   **`expression_df`**: Has `gene_name` as an ID, but the patient IDs (`TCGA-90-A4EE`, etc.) are the **column names**.
+
+To perform a relational join (a "liking" in wer terms), the `expression_df` must be *unpivoted* (or *melted*) so that all patient IDs are in a single column.
+
+The Python code above uses a **DuckDB SQL `UNPIVOT`/`UNNEST`** technique to transform the wide RNA matrix into a long format (`case_id`, `gene_name`, `expression`), which is the **correct relational structure for joining** with the `clinical_metadata` table. This is the key step to "build the liking" between wer datasets.
+
+## 1. DuckDB SQL: How the Samples Were Linked
+
+The connection between the `clinical_metadata_db` and the `rna_expression_matrix_db` is built in two key SQL steps, which are necessary because the patient IDs (e.g., `TCGA-90-A4EE`) exist as **column names** in the expression data but as **row values** (`case_id`) in the clinical data.
+
+### Step 1: Unpivoting the RNA Expression Data (The Key "Liking" Step)
+
+The first step creates a temporary table in the correct relational format.
+
+```         
+CREATE TEMP TABLE rna_expression_unpivoted AS
+SELECT
+    gene_name,
+    unnest(list_value(
+        -- This part manually creates a structured list of {case_id, expression} pairs
+        struct_pack(case_id := 'TCGA-90-A4EE', expression := "TCGA-90-A4EE"),
+        struct_pack(case_id := 'TCGA-85-8049', expression := "TCGA-85-8049"),
+        -- ... and so on for all patient columns
+        ...
+    )).*
+FROM rna_expression_matrix_db;
+```
+
+```{python}
+
+linking_query1 = """
+SELECT
+    t1.case_id,
+    t1.vital_status,
+    t1.age_at_dx,
+    t2.gene_name,
+    t2.sample_id,
+    t2.expression
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_unpivoted t2
+    ON t1.case_id = t2.sample_id
+WHERE t2.gene_name IN ('TSPAN6', 'DPM1')
+LIMIT 1000;
+"""
+cursor = con.execute(linking_query1).fetchdf()
+```
+
+```{python}
+
+
+```
+
+Based on the padj​ values we provided, a common threshold for significance is padj​\<0.05.
+
+### 1. Identify Truly Significant Genes
+
+We will filter the genes we provided to select those that meet the statistical significance threshold of padj​\<0.05.
+
+|              |        |                           |
+|--------------|--------|---------------------------|
+| Gene         | padj​   | Significant (padj​\<0.05)? |
+| **HSD17B14** | 0.0176 | **YES**                   |
+| **CLTA**     | 0.0176 | **YES**                   |
+| **C9orf72**  | 0.0206 | **YES**                   |
+| **TTC39A**   | 0.0268 | **YES**                   |
+| **C4orf48**  | 0.0306 | **YES**                   |
+| **TESK1**    | 0.0366 | **YES**                   |
+| **FAM241B**  | 0.0413 | **YES**                   |
+| C5           | 0.0536 | NO                        |
+| TP53I3       | 0.0536 | NO                        |
+| SLC39A4      | 0.0536 | NO                        |
+| CLDN3        | 0.0536 | NO                        |
+| NRIP3        | 0.0536 | NO                        |
+| PYCR1        | 0.0561 | NO                        |
+| MT1M         | 0.0777 | NO                        |
+| H19          | 0.0821 | NO                        |
+| PSD3         | 0.0821 | NO                        |
+| ETNK1        | 0.0942 | NO                        |
+| HMGB3        | 0.0966 | NO                        |
+| TRPM2        | 0.0966 | NO                        |
+| MELK         | 0.0966 | NO                        |
+| HILPDA       | 0.0969 | NO                        |
+| ATP23        | 0.0969 | NO                        |
+| IFFO2        | 0.0969 | NO                        |
+| TMEM80       | 0.0969 | NO                        |
+| PRAG1        | 0.0969 | NO                        |
+| SVIP         | 0.0984 | NO                        |
+
+**The 7 Significant Genes (**padj​\<0.05) are: `HSD17B14`, `CLTA`, `C9orf72`, `TTC39A`, `C4orf48`, `TESK1`, and `FAM241B`.
+
+### 2. DuckDB Query for Survival Analysis Data
+
+We will use the **unpivoted expression table** (`rna_expression_unpivoted`) and the **clinical metadata table** (`clinical_metadata_db`) to extract the exact data needed for survival analysis.
+
+To perform survival analysis using DuckDB, we’ll need to:
+
+1.  **Filter the expression data** for wer 7 significant genes.
+
+2.  **Join** it with clinical metadata (especially `vital_status`, `days_to_death`, `days_to_last_followup`).
+
+3.  **Create a survival-ready table** with one row per patient, including expression values and survival time/status.
+
+4.  **Export** that table to Python (e.g., for use with `lifelines` or `scikit-survival`).
+
+### Step-by-Step DuckDB Query for Survival Prep
+
+Here’s how to build the query:
+
+#### ✅ 1. Define wer Gene List in SQL
+
+```{python}
+significant_genes = ['HSD17B14', 'CLTA', 'C9orf72', 'TTC39A', 'C4orf48', 'TESK1', 'FAM241B']
+gene_list_sql = ', '.join([f"'{gene}'" for gene in significant_genes])
+```
+
+#### ✅ 2. Query to Build Survival Table
+
+```{python}
+survival_query = f"""
+SELECT
+    t1.case_id,
+    t1.vital_status,
+    COALESCE(t1.days_to_death, t1.days_to_last_followup) AS survival_days,
+    t1.age_at_dx,
+    t2.gene_name,
+    t2.expression
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_unpivoted t2
+    ON t1.case_id = t2.sample_id
+WHERE t2.gene_name IN ({gene_list_sql})
+"""
+```
+
+#### ✅ 3. Fetch and Pivot in Python
+
+```{python}
+survival_df_long = con.execute(survival_query).fetchdf()
+
+# Pivot to wide format: one row per patient
+survival_df = survival_df_long.pivot_table(
+    index=['case_id', 'vital_status', 'survival_days', 'age_at_dx'],
+    columns='gene_name',
+    values='expression'
+).reset_index()
+
+print("✅ Survival-ready DataFrame:")
+print(survival_df.head())
+
+```
+
+save
+
+```{python}
+survival_df.to_csv(r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\survial_data.csv")
+```
+
+``` python
+✅ Survival-ready DataFrame:
+gene_name       case_id vital_status  survival_days  age_at_dx  ...  FAM241B  HSD17B14    TESK1  TTC39A
+0          TCGA-18-3406         Dead          371.0       67.0  ...   7.8203    6.8117  11.0774  1.7314
+1          TCGA-18-3407         Dead          136.0       72.0  ...   3.7595    3.3361  13.5017  0.7852
+2          TCGA-18-3408        Alive         2099.0       77.0  ...  13.0744    2.2227   7.7895  1.2734
+3          TCGA-18-3409        Alive         2417.0       74.0  ...  14.0642    9.4156   8.2695  0.3505
+4          TCGA-18-3410         Dead          146.0       81.0  ...  13.9918    3.8372  10.0191  2.1708
+
+[5 rows x 11 columns]
+```
+
+## survival analysis
+
+### ✅ Step 1: Convert `vital_status` to Binary
+
+```{python}
+# Convert 'Dead' → 1, 'Alive' → 0
+survival_df['event'] = survival_df['vital_status'].map({'Dead': 1, 'Alive': 0})
+```
+
+### ✅ Step 2: Check Column Types
+
+```{python}
+print(survival_df.dtypes) 
+```
+
+we want:
+
+-   `survival_days`: float or int
+
+-   `event`: int (0/1)
+
+-   Gene columns: float
+
+-   `age_at_dx`: float or int
+
+If anything is `object`, convert it:
+
+```{python}
+survival_df['survival_days'] = pd.to_numeric(survival_df['survival_days'], errors='coerce')
+survival_df['age_at_dx'] = pd.to_numeric(survival_df['age_at_dx'], errors='coerce')
+```
+
+### ✅ Step 3: KNN impute the miss data
+
+#### ✅ Apply KNN Imputer
+
+```{python}
+from sklearn.impute import KNNImputer
+
+# Select columns to impute (excluding case_id and vital_status)
+impute_cols = ['survival_days', 'age_at_dx'] + significant_genes
+
+# Create a copy to avoid modifying original
+impute_df = survival_df[impute_cols].copy()
+
+# Initialize the imputer
+imputer = KNNImputer(n_neighbors=10)
+
+# Fit and transform
+imputed_array = imputer.fit_transform(impute_df)
+
+# Replace the original columns with imputed values
+survival_df[impute_cols] = imputed_array
+```
+
+### ✅ Step 4: Run Kaplan-Meier Survival Curves
+
+Here’s an example for one gene (`TESK1`):
+
+```{python}
+from lifelines import KaplanMeierFitter
+import matplotlib.pyplot as plt
+
+# Median split
+survival_df['TESK1_group'] = survival_df['TESK1'] > survival_df['TESK1'].median()
+
+kmf = KaplanMeierFitter()
+
+plt.figure(figsize=(8, 6))
+for group in [True, False]:
+    mask = survival_df['TESK1_group'] == group
+    label = 'High TESK1' if group else 'Low TESK1'
+    kmf.fit(survival_df.loc[mask, 'survival_days'], survival_df.loc[mask, 'event'], label=label)
+    kmf.plot_survival_function()
+
+plt.title("Kaplan-Meier Survival Curve: TESK1")
+plt.xlabel("Days")
+plt.ylabel("Survival Probability")
+plt.grid(True)
+plt.show()
+
+```
+
+### ✅ Step 5: Fit Cox Proportional Hazards Model
+
+```{python}
+from lifelines import CoxPHFitter
+
+cox_df = survival_df[['survival_days', 'event', 'age_at_dx'] + significant_genes]
+cph = CoxPHFitter()
+cph.fit(cox_df, duration_col='survival_days', event_col='event')
+cph.print_summary()
+```
+
+| model                     | lifelines.CoxPHFitter   |
+|---------------------------|-------------------------|
+| duration col              | 'survival_days'         |
+| event col                 | 'event'                 |
+| baseline estimation       | breslow                 |
+| number of observations    | 489                     |
+| number of events observed | 154                     |
+| partial log-likelihood    | -757.38                 |
+| time fit was run          | 2025-10-13 13:42:02 UTC |
+
+|   | coef | exp(coef) | se(coef) | coef lower 95% | coef upper 95% | exp(coef) lower 95% | exp(coef) upper 95% | cmp to | z | p | -log2(p) |
+|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|
+| age_at_dx | 0.02 | 1.02 | 0.01 | 0.00 | 0.05 | 1.00 | 1.05 | 0.00 | 2.19 | 0.03 | 5.12 |
+| HSD17B14 | -0.01 | 0.99 | 0.01 | -0.02 | 0.01 | 0.98 | 1.01 | 0.00 | -0.73 | 0.46 | 1.11 |
+| CLTA | -0.00 | 1.00 | 0.00 | -0.01 | 0.00 | 0.99 | 1.00 | 0.00 | -0.60 | 0.55 | 0.87 |
+| C9orf72 | -0.00 | 1.00 | 0.03 | -0.06 | 0.05 | 0.95 | 1.05 | 0.00 | -0.09 | 0.93 | 0.10 |
+| TTC39A | 0.09 | 1.09 | 0.04 | 0.00 | 0.18 | 1.00 | 1.19 | 0.00 | 1.99 | 0.05 | 4.41 |
+| C4orf48 | 0.02 | 1.02 | 0.01 | -0.00 | 0.04 | 1.00 | 1.04 | 0.00 | 1.51 | 0.13 | 2.93 |
+| TESK1 | 0.00 | 1.00 | 0.01 | -0.01 | 0.02 | 0.99 | 1.02 | 0.00 | 0.48 | 0.63 | 0.66 |
+| FAM241B | -0.01 | 0.99 | 0.01 | -0.03 | 0.02 | 0.97 | 1.02 | 0.00 | -0.35 | 0.73 | 0.46 |
+
+![](data2/plot-28.png)
+
+1.  **Run a Cox model with all 7 genes together**
+
+2.  **Stratify by clinical features like stage or gender**
+
+3.  **Visualize hazard ratios with confidence intervals**
+
+### 🧬 1. use the TTC39A
+
+```{python}
+from lifelines import KaplanMeierFitter
+import matplotlib.pyplot as plt
+
+# Median split
+survival_df['TTC39A_group'] = survival_df['TTC39A'] > survival_df['TTC39A'].median()
+
+kmf = KaplanMeierFitter()
+
+plt.figure(figsize=(8, 6))
+for group in [True, False]:
+    mask = survival_df['TTC39A_group'] == group
+    label = 'High TTC39A' if group else 'Low TTC39A'
+    kmf.fit(survival_df.loc[mask, 'survival_days'], survival_df.loc[mask, 'event'], label=label)
+    kmf.plot_survival_function()
+
+plt.title("Kaplan-Meier Survival Curve: TTC39A")
+plt.xlabel("Days")
+plt.ylabel("Survival Probability")
+plt.grid(True)
+plt.show()
+
+```
+
+![](plot-29.png)
+
+### 🧠 2. Stratify by Clinical Features (e.g. Stage, Gender)
+
+**Stratification** means analyzing survival within subgroups to see if gene effects differ.
+
+#### Example: Stratify by `gender`
+
+I have not extracted the meta data like tis ,so skip
+
+we can do the same for `stage`, `tumor_status`, or any other clinical variable.
+
+### 📊 3. Visualize Hazard Ratios with Confidence Intervals
+
+Use `lifelines` to generate a forest plot:
+
+```{python}
+import matplotlib.pyplot as plt
+
+# Plot hazard ratios
+ax = cph.plot(hazard_ratios=True)
+
+# Customize the plot afterward
+fig = ax.get_figure()
+fig.set_size_inches(8, 6)
+plt.title("Hazard Ratios for 7 Significant Genes")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+```
+
+This plot shows:
+
+-   HR \> 1: higher risk
+
+-   HR \< 1: protective effect
+
+-   Confidence intervals: statistical certainty
+
+![](data2/plot-29.png)
+
+## Seems our so called significant genes is not significant at all
+
+The most important genes in **Lung Squamous Cell Carcinoma (LUSC)**, particularly those frequently altered or associated with prognosis (survival), include:
+
+## Key Driver and Highly Mutated Genes
+
+These genes are frequently mutated or altered in LUSC and are considered major drivers of the disease:
+
+-   TP53: This is the most commonly mutated gene in LUSC, with a mutation frequency of **over 80%**. As a tumor suppressor gene, its inactivation is a critical event in LUSC development.
+
+-   CDKN2A: This tumor suppressor gene is often lost or deleted. It's an important factor in cell cycle regulation.
+
+-   PIK3CA: Mutations in this gene activate the PI3K signaling pathway, which promotes cell growth and survival, making it an important driver.
+
+-   NFE2L2: Alterations in this gene are also a frequent driver in LUSC, involved in antioxidant response.
+
+-   SOX2 and TP63: These genes are often overexpressed and amplified, acting as spectrum factors that help define the squamous cell type.
+
+### ✅ Updated Gene List (LUSC Drivers)
+
+```{python}
+significant_genes = ['TP53', 'CDKN2A', 'PIK3CA', 'NFE2L2', 'SOX2', 'TP63']
+gene_list_sql = ', '.join([f"'{gene}'" for gene in significant_genes])
+ 
+```
+
+### ✅ Updated DuckDB Query
+
+```{python}
+survival_query = f"""
+SELECT
+    t1.case_id,
+    t1.vital_status,
+    COALESCE(t1.days_to_death, t1.days_to_last_followup) AS survival_days,
+    t1.age_at_dx,
+    t2.gene_name,
+    t2.expression
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_unpivoted t2
+    ON t1.case_id = t2.sample_id
+WHERE t2.gene_name IN ({gene_list_sql})
+"""
+survival_df_long = con.execute(survival_query).fetchdf()
+```
+
+### ✅ Pivot to Wide Format
+
+```{python}
+survival_df = survival_df_long.pivot_table(
+    index=['case_id', 'vital_status', 'survival_days', 'age_at_dx'],
+    columns='gene_name',
+    values='expression'
+).reset_index()
+
+print("✅ Survival-ready DataFrame:")
+print(survival_df.head())
+```
+
+### 💾 Save to CSV
+
+```{python}
+survival_df.to_csv(r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\survial_data.csv", index=False)
+```
+
+## 🧠 Step 1: Impute Missing Values (KNN)
+
+```{python}
+# Select columns to impute (excluding case_id and vital_status)
+impute_cols = ['survival_days', 'age_at_dx'] + significant_genes
+
+# Create a copy to avoid modifying original
+impute_df = survival_df[impute_cols].copy()
+
+# Initialize the imputer
+imputer = KNNImputer(n_neighbors=10)
+
+# Fit and transform
+imputed_array = imputer.fit_transform(impute_df)
+
+# Replace the original columns with imputed values
+survival_df[impute_cols] = imputed_array
+```
+
+## 🔁 Step 2: Convert `vital_status` to Binary Event
+
+```{python}
+survival_df['event'] = survival_df['vital_status'].map({'Dead': 1, 'Alive': 0}).astype(int)
+```
+
+### ⚖️ Step 2: Z-score Normalization (Standardization)
+
+This centers each gene’s expression around 0 and scales by standard deviation:
+
+```{python}
+from sklearn.preprocessing import StandardScaler
+
+scaler = StandardScaler()
+survival_df[significant_genes] = scaler.fit_transform(survival_df[significant_genes])
+```
+
+## 📊 Step 3: Run Multivariate Cox
+
+```{python}
+from lifelines import CoxPHFitter
+
+cox_df = survival_df[['survival_days', 'event', 'age_at_dx'] + significant_genes]
+cph = CoxPHFitter()
+cph.fit(cox_df, duration_col='survival_days', event_col='event')
+cph.print_summary()
+```
+
+| model                     | lifelines.CoxPHFitter   |
+|---------------------------|-------------------------|
+| duration col              | 'survival_days'         |
+| event col                 | 'event'                 |
+| baseline estimation       | breslow                 |
+| number of observations    | 489                     |
+| number of events observed | 154                     |
+| partial log-likelihood    | -755.72                 |
+| time fit was run          | 2025-10-13 14:17:05 UTC |
+
+|   | coef | exp(coef) | se(coef) | coef lower 95% | coef upper 95% | exp(coef) lower 95% | exp(coef) upper 95% | cmp to | z | p | -log2(p) |
+|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|
+| age_at_dx | 0.02 | 1.02 | 0.01 | 0.00 | 0.04 | 1.00 | 1.04 | 0.00 | 2.15 | 0.03 | 4.99 |
+| TP53 | -0.00 | 1.00 | 0.01 | -0.02 | 0.01 | 0.98 | 1.01 | 0.00 | -0.42 | 0.68 | 0.56 |
+| CDKN2A | -0.01 | 0.99 | 0.01 | -0.02 | 0.01 | 0.98 | 1.01 | 0.00 | -1.21 | 0.23 | 2.15 |
+| PIK3CA | -0.04 | 0.96 | 0.04 | -0.12 | 0.05 | 0.89 | 1.05 | 0.00 | -0.83 | 0.40 | 1.31 |
+| NFE2L2 | 0.00 | 1.00 | 0.00 | -0.00 | 0.01 | 1.00 | 1.01 | 0.00 | 0.75 | 0.45 | 1.14 |
+| SOX2 | -0.00 | 1.00 | 0.00 | -0.00 | 0.00 | 1.00 | 1.00 | 0.00 | -0.69 | 0.49 | 1.03 |
+| TP63 | -0.00 | 1.00 | 0.00 | -0.01 | 0.00 | 0.99 | 1.00 | 0.00 | -1.26 | 0.21 | 2.27 |
+
+| Concordance               | 0.59          |
+|---------------------------|---------------|
+| Partial AIC               | 1525.45       |
+| log-likelihood ratio test | 13.45 on 7 df |
+| -log2(p) of ll-ratio test | 4.01          |
+
+## 📈 Step 4: Visualize Hazard Ratios
+
+```{python}
+import matplotlib.pyplot as plt
+
+ax = cph.plot(hazard_ratios=True)
+fig = ax.get_figure()
+fig.set_size_inches(8, 6)
+plt.title("Hazard Ratios for LUSC Driver Genes")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+![](data2/plot-291.png)
+
+## 🧪 Step 5: Explore Gene-Gene Interactions or Build Risk Score
+
+### Option A: Interaction Terms
+
+```{python}
+cox_df['TP53_x_PIK3CA'] = cox_df['TP53'] * cox_df['PIK3CA']
+cph.fit(cox_df, duration_col='survival_days', event_col='event')
+cph.print_summary()
+```
+
+### Option B: Risk Score (linear combination of weighted expression)
+
+```{python}
+risk_score = cph.predict_partial_hazard(cox_df)
+survival_df['risk_score'] = risk_score.values
+print(survival_df['risk_score'].head())
+```
+
+```         
+... print(survival_df['risk_score'].head())
+0    1.153991
+1    0.968188
+2    0.894628
+3    1.335779
+4    1.279238
+```
+
+hold on ,i think it is not good at all,the data sucks i guess ,fuck it

@@ -1,0 +1,1191 @@
+---
+title: wsl
+authors:
+  - name: Norah Jones
+    affiliation: The University
+    roles: writing
+    corresponding: true
+bibliography: references.bib
+---
+
+# Upstream of SC RNA seq-- the project
+
+## Get data
+
+Based on the dataset from BioProject PRJNA1107958, I recommend you start with **SRR28902977**, which is:
+
+-   🧬 **Sample Type**: CD (Crohn’s Disease)
+
+-   🧠 **Region**: Terminal ileum
+
+-   📉 **Size**: 2.43 GB — very manageable for local testing
+
+-   🧪 **Condition**: Non-inflamed
+
+-   🧬 **Assay Type**: Single-cell RNA-seq (scRNA-seq)
+
+-   🧬 **Platform**: Illumina NovaSeq 6000
+
+This run gives you a clean, compact dataset from a relevant tissue and disease context, perfect for pipeline setup, barcode/UMI validation, and early clustering tests.
+
+``` bash
+jayz@localhost:~$ fastq-dump --split-files --skip-technical --maxSpotId 2000000 SRR28902977
+Read 2000000 spots for SRR28902977
+Written 2000000 spots for SRR28902977
+```
+
+create the new folder and put the file to our new folder
+
+``` bash
+jayz@localhost:~$ ls
+SRR28902977_1.fastq  bioinfo-practice         bulk_RNA  snap                       sratoolkit.current-ubuntu64.tar.gz
+SRR28902977_2.fastq  bioinformatics_practice  data      sratoolkit.3.2.1-ubuntu64
+jayz@localhost:~$ mkdir -p ~/scRNAseqproject/data
+jayz@localhost:~$ cp SRR28902977_1.fastq SRR28902977_2.fastq ~/scRNAseqproject/data/
+jayz@localhost:~$ cd ~/scRNAseqproject/data
+jayz@localhost:~/scRNAseqproject/data$ ls
+SRR28902977_1.fastq  SRR28902977_2.fastq
+jayz@localhost:~/scRNAseqproject/data$
+```
+
+and check the data we have download
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ head -n 20 SRR28902977_1.fastq
+@SRR28902977.1 A00639:582:HYVFWDRXX:1:2101:30870:1000 length=28
+TNAACGTGTCAGGTGATAATGGCCATAT
++SRR28902977.1 A00639:582:HYVFWDRXX:1:2101:30870:1000 length=28
+F#FFFFFFFFFFFFFFF:FFFFFFFFFF
+@SRR28902977.2 A00639:582:HYVFWDRXX:1:2101:32208:1000 length=28
+CNATAAGTCCGCGAGTAACCATGTATAT
++SRR28902977.2 A00639:582:HYVFWDRXX:1:2101:32208:1000 length=28
+F#FFFFFFFFFF:FFFFFFFFFFFFFFF
+@SRR28902977.3 A00639:582:HYVFWDRXX:1:2101:32533:1000 length=28
+CNCCACAAGATTAGTGGATCCTTTAAAG
++SRR28902977.3 A00639:582:HYVFWDRXX:1:2101:32533:1000 length=28
+,#FFFFFFFFFFFFFFFFFFFFFFFFFF
+@SRR28902977.4 A00639:582:HYVFWDRXX:1:2101:32823:1000 length=28
+TNACGGGCATAGGTTCACCGCTAACTAT
++SRR28902977.4 A00639:582:HYVFWDRXX:1:2101:32823:1000 length=28
+F#FFFFFF:FFFFFFFFFFF:FFFFFFF
+@SRR28902977.5 A00639:582:HYVFWDRXX:1:2101:2058:1016 length=28
+TNTAACGAGAATCGTAGTCAGGTCGTTG
++SRR28902977.5 A00639:582:HYVFWDRXX:1:2101:2058:1016 length=28
+```
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ awk 'NR%4==2 {print length($0)}' SRR28902977_1.fastq | sort | uniq -c
+2000000 28
+```
+
+this confirms that your **Read 1** (`SRR28902977_1.fastq`) contains 28 bp sequences, which is typical for **10x Genomics-style single-cell RNA-seq**:
+
+-   🔢 **First 16 bp**: likely the **cell barcode**
+
+-   🧬 **Next 12 bp**: likely the **UMI (Unique Molecular Identifier)**
+
+This layout matches the **10x v3 chemistry**, which is widely used and compatible with tools like **STARsolo**, **kallisto\|bustools**, and **Cell Ranger**.
+
+## QC
+
+### 🧪 Quick Validation: Split Barcode and UMI
+
+You can run this to inspect the first read:
+
+bash
+
+``` bash
+awk 'NR%4==2 {print "Barcode:", substr($0,1,16), "\tUMI:", substr($0,17,12); exit}' SRR28902977_1.fastq
+```
+
+``` bash
+ awk 'NR%4==2 {print "Barcode:", substr($0,1,16), "\tUMI:", substr($0,17,12); exit}' SRR28902977_1.fastq
+Barcode: TNAACGTGTCAGGTGA       UMI: TAATGGCCATAT
+```
+
+And to see the most frequent barcodes (to confirm real cells):
+
+``` bash
+awk 'NR%4==2 {print substr($0,1,16)}' SRR28902977_1.fastq | sort | uniq -c | sort -nr | head -n 20
+```
+
+If you see some barcodes with high counts, that’s a good sign — real cells are present.
+
+``` bash
+awk 'NR%4==2 {print substr($0,1,16)}' SRR28902977_1.fastq | sort | uniq -c | sort -nr | head -n 20
+   2444 CTGGCAGTCTCTCTAA
+   1860 CACAGGCTCTGATTCT
+   1850 TCATTTGCACTGGACC
+   1810 ACCTGTCCACCAGCTG
+   1774 GTACAGTGTATCTCTT
+   1755 CATACTTGTACCAATC
+   1722 TGTGAGTGTTCTCCTG
+   1650 GGTAATCTCGCAACAT
+   1493 GGCGTCAAGTATGAAC
+   1491 TTCTTGACAACCCTCT
+   1483 TCCAGAAGTCGAGTGA
+   1476 AACGAAAGTCTTCATT
+   1458 TAACGACTCTCATTTG
+   1369 ACCCTCATCGAATCCA
+   1351 GCTCAAACACACGTGC
+   1319 TTGCATTTCCTCTTTC
+   1310 TCAATCTCAATAAGGT
+   1304 TCTGGCTTCATTGAGC
+   1269 TGATTCTGTTACGCCG
+   1268 CGATCGGTCAGCTGTA
+```
+
+### ✅ What You Just Verified
+
+-   **Read 1 length**: 28 bp
+
+-   **Barcode (1–16)**: e.g. `CTGGCAGTCTCTCTAA`
+
+-   **UMI (17–28)**: e.g. `TAATGGCCATAT`
+
+-   **Top barcodes**: Some appear \>2,000× — clear signal of real cells
+
+This is exactly what you'd expect from a 10x Genomics v3 chemistry dataset. You're ready to build a matrix.
+
+and we just could check the 20 head to the fucking \_2 fastq . adn we will fucking get it is different compared the \_1fastq
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ head -n 20 SRR28902977_2.fastq
+@SRR28902977.1 A00639:582:HYVFWDRXX:1:2101:30870:1000 length=100
+GCAGTGGTATCAACGCAGAGTACATGGGGGAAAAGCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
++SRR28902977.1 A00639:582:HYVFWDRXX:1:2101:30870:1000 length=100
+F,FF::FFFFFFFFFFFFFFFFFF:FFFFFFF,FFFFFFFFFFFFF:FF:FFFFFFFFFFF:FFFFFFFFFFFFFFFFFF:FFFFFFFFFFFFFFFF:FF
+@SRR28902977.2 A00639:582:HYVFWDRXX:1:2101:32208:1000 length=100
+CTCCAGCCTAGGCGACAGAGCAAGACTCTGTCTCAAAAAAGATAAATAAAACAAAATTTTTTTAAAAAAGCTAGGCATGGTGGTGCATGTCTGTATTCCC
++SRR28902977.2 A00639:582:HYVFWDRXX:1:2101:32208:1000 length=100
+:FFFFFFFFFFFFFFFFFFFFF,FF:FFFFF::FF:FFFFFFFFFFFFFFF:FFFFFF,FFFFFFFFFF,FFFF:FFFFFFFFF:,FFFFFFFFFFFFFF
+@SRR28902977.3 A00639:582:HYVFWDRXX:1:2101:32533:1000 length=100
+AGGAGCAAATTCACACATAACAATATTAACCTTAAATGTAAATGGGCTAAATGCCCCAATTCAAAGACACAGACTGGCAAATTGGATAAAGAGTCAAGAC
++SRR28902977.3 A00639:582:HYVFWDRXX:1:2101:32533:1000 length=100
+,FFF,F:FFFFFF:FFF:FFFFFFF,FFFFFFFFFFFFFFFF:FFFFFFFFFFFFFFFFFF,FFFF:FFFFF::FF:FFFFFFFF,F:FFFFFFF,FFFF
+@SRR28902977.4 A00639:582:HYVFWDRXX:1:2101:32823:1000 length=100
+CATTACTGCAGGCCACCTACTCATGCACCTAATTGGAAGCGCCACCCTAGCAATATCAACCATTAACCTTCCCTCTACACTTATCATCTTCACAATTCTA
++SRR28902977.4 A00639:582:HYVFWDRXX:1:2101:32823:1000 length=100
+FFFF,F:FFFFFFFFF,FFFFFFFFFFFFFFFFFFFFFFF:FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:FFFFF:F
+@SRR28902977.5 A00639:582:HYVFWDRXX:1:2101:2058:1016 length=100
+CATTATTATAATAAACACCCTCACCACTACAATCTTCCTAGGAACAACATATGACGCAATCTCCCCTGAACTCTACACAACATATTTTGTCACCAAGACC
++SRR28902977.5 A00639:582:HYVFWDRXX:1:2101:2058:1016 length=100
+FFFFF:FFFF:FFFFFF,FFFFFFFFFFFFFF:FF,FFFFFFF:FFFFFFFF,FFFF:,:F,FF,F:FFF,FFFFFFF:F:F,FF,FFF,FFF:FFFFF:
+```
+
+### 🧬 What Each Read Represents
+
+| File | Length | Content Type | Role in Pipeline |
+|------------------|------------------|------------------|------------------|
+| `SRR28902977_1.fastq` | 28 bp | Cell Barcode (16 bp) + UMI (12 bp) | Used to identify cells and deduplicate |
+| `SRR28902977_2.fastq` | 100 bp | cDNA (transcript sequence) | Used for alignment and quantification |
+
+So no worries — the difference is intentional and correct.
+
+first check the quanlification of R2 reads that how long thst are
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ awk 'NR%4==2{if($0 ~ /A{20,}/) c++; n++}
+     END{printf "polyA>=20 count: %d / %d (%.3f%%)\n", c, n, (n?c/n*100:0)}' SRR28902977_2.fastq
+polyA>=20 count: 73581 / 2000000 (3.679%)
+```
+
+Interpretation:
+
+-   **\< 1%** → probably negligible; no trimming needed.
+
+-   **1–5%** → small but worth checking mapping rates.
+
+-   **\> 5–10%** → consider trimming R2 (or at least test mapping before/after trimming).
+
+***Next we will trim them as though it is not too much,but let us do fastqc at first***
+
+### ✅ Do You Need to Do Anything Special with Read 2?
+
+Not really — just make sure you **don’t trim or modify Read 1**, because it contains positional barcode/UMI info. But for Read 2, you can optionally:
+
+#### 1. **Run FastQC** to check for adapter contamination or low quality:
+
+``` bash
+fastqc SRR28902977_2.fastq -o qc/ 
+```
+
+take a look
+
+![](images/屏幕截图%202025-09-24%20092207.png)
+
+And we see the duplication level shows it error,but it is normal for SC RNA seq , cuz fastq is used for bulk RNA
+
+### 📊 What the Plot Shows
+
+-   The **x-axis**: duplication level (how many times a sequence appears)
+
+-   The **y-axis**: percent of sequences remaining after deduplication
+
+-   Your plot shows a **steep drop-off** after duplication level 1 — meaning:
+
+    -   Most sequences are **unique** (duplication level = 1)
+
+    -   Very few sequences are duplicated many times
+
+This is **normal and expected** for scRNA-seq data, especially from 10x Genomics-style libraries. It suggests:
+
+-   ✅ **High library complexity**
+
+-   ✅ **Low PCR bias**
+
+-   ✅ **No major contamination or over-amplification**
+
+### 🧠 Why This Is Good
+
+In single-cell RNA-seq, especially with 10x data:
+
+-   Each cell contributes a small number of unique transcripts
+
+-   High duplication would suggest technical artifacts (e.g., PCR overamplification)
+
+-   Your data shows **low duplication**, which means:
+
+    -   You’re capturing diverse transcriptomes
+
+    -   Your downstream clustering and gene expression analysis will be more reliable
+
+### 🧪 What You Don’t Need to Do
+
+-   ❌ No need to deduplicate manually — tools like STARsolo and kallisto\|bustools handle UMI-based deduplication automatically
+
+-   ❌ No need to filter out duplicated reads — they’re biologically meaningful if they share the same UMI
+
+#### #2. **Trim adapters or low-quality bases (if needed)**
+
+Only if FastQC shows problems:
+
+``` bash
+cutadapt -a ADAPTER_SEQ -o SRR28902977_2.trim.fastq SRR28902977_2.fastq 
+```
+
+Or use `fastp`:
+
+``` bash
+fastp -i SRR28902977_2.fastq -o SRR28902977_2.trim.fastq --detect_adapter_for_pe --thread 4 
+```
+
+> ⚠️ **Do not trim Read 1** — it must stay intact for barcode/UMI extraction.
+
+### 🧬 TL;DR: **Map First** — No Trimming for Read 1, Optional Trimming for Read 2
+
+| Read Type | Contains | Trim? | Why? |
+|------------------|------------------|------------------|------------------|
+| `SRR28902977_1` | Cell Barcode + UMI | ❌ Never | Fixed positions — trimming breaks structure |
+| `SRR28902977_2` | Transcript (cDNA) | ✅ If needed | Only if FastQC shows adapter or low quality |
+
+### ✅ Why You Map First (or Skip Trimming)
+
+-   **Read 1** must remain untouched — it encodes cell identity and UMI deduplication.
+
+-   Most modern tools (STARsolo, kallisto\|bustools, Cell Ranger) **handle low-quality bases and adapters internally**.
+
+-   Trimming Read 2 is optional and only needed if FastQC shows:
+
+    -   Adapter contamination
+
+    -   Low-quality tails
+
+    -   Overrepresented sequences (you don’t have any — good!)
+
+### 🧪 If You Do Trim Read 2
+
+Use `fastp` or `cutadapt` **only on Read 2**:
+
+bash
+
+``` bash
+fastp -i SRR28902977_2.fastq -o SRR28902977_2.trim.fastq \       --detect_adapter_for_pe --thread 4 --html fastp_report.html 
+```
+
+Then use `SRR28902977_2.trim.fastq` in your pipeline.
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data/qc$ cd ~/scRNAseqproject/data
+jayz@localhost:~/scRNAseqproject/data$ fastp -i SRR28902977_2.fastq -o SRR28902977_2.trim.fastq \
+      --detect_adapter_for_pe --thread 4 --html fastp_report.html
+Detecting adapter sequence for read1...
+No adapter detected for read1
+
+Read1 before filtering:
+total reads: 2000000
+total bases: 200000000
+Q20 bases: 195492070(97.746%)
+Q30 bases: 188444021(94.222%)
+
+Read1 after filtering:
+total reads: 1981135
+total bases: 198113500
+Q20 bases: 194627002(98.2402%)
+Q30 bases: 187856441(94.8226%)
+
+Filtering result:
+reads passed filter: 1981135
+reads failed due to low quality: 18627
+reads failed due to too many N: 238
+reads failed due to too short: 0
+reads with adapter trimmed: 0
+bases trimmed due to adapters: 0
+
+Duplication rate (may be overestimated since this is SE data): 55.2866%
+
+JSON report: fastp.json
+HTML report: fastp_report.html
+
+fastp -i SRR28902977_2.fastq -o SRR28902977_2.trim.fastq --detect_adapter_for_pe --thread 4 --html fastp_report.html
+fastp v0.23.4, time used: 5 seconds
+```
+
+![](images/屏幕截图%202025-09-24%20093649.png)
+
+![](images/屏幕截图%202025-09-24%20093707.png)
+
+![](images/屏幕截图%202025-09-24%20093716.png)
+
+### ✅ Read 2 Quality Is Solid
+
+-   **Q30 bases**: 94.8% — excellent
+
+-   **Adapter contamination**: none detected
+
+-   **Low-quality reads removed**: \~0.9% — minimal
+
+-   **Duplication rate**: 55% (expected in scRNA-seq due to PCR + UMI redundancy)
+
+You now have a clean `SRR28902977_2.trim.fastq` file ready for mapping.
+
+### 🧬 Do You Need to Trim PolyA Tails?
+
+In single-cell RNA sequencing (scRNA-seq), particularly with 3' tag-based protocols like 10x Genomics, we need to trim the long poly-A tail in Read 2 (R2) for several important reasons:
+
+### 1. Improved Read Mapping and Alignment
+
+The R2 read is designed to sequence the mRNA transcript's 3' end, including the **poly-A tail** and the downstream adapter. When the poly-A tail is too long, the read consists of a repetitive string of 'A's.
+
+This homopolymeric stretch can lead to poor quality scores and can be difficult for aligners to map uniquely to the reference genome. Trimming the poly-A tail removes this repetitive, low-complexity sequence, which **significantly improves the quality of the reads** and allows for more accurate alignment to the gene's 3' end.(
+
+```         
+这种均聚物拉伸会导致质量评分较差，并且矫正器可能难以唯一地映射到参考基因组。修剪 poly-A 尾部可以去除这种重复的、低复杂性的序列，从而显着提高读数的质量，并允许更准确地与基因的 3'端进行比对
+```
+
+) This is crucial for correctly quantifying gene expression.
+
+### 2. Accurate Quantification of Unique Molecular Identifiers (UMIs)
+
+In 3' scRNA-seq, Read 1 (R1) contains the cell barcode and a **Unique Molecular Identifier (UMI)**, while R2 sequences the biological transcript. The UMI is a short, random sequence that tags each mRNA molecule before amplification. During data analysis, reads with the same UMI and mapping to the same gene are counted as a single molecule, which helps correct for PCR amplification bias.
+
+However, if the long poly-A tail in R2 isn't trimmed, the poly-A sequence can bleed into the UMI region. This can cause errors in UMI deduplication, leading to an inaccurate count of the original mRNA molecules. By trimming the poly-A tail, you ensure that the UMI information in R1 is clean and that the counts are as accurate as possible.
+
+#### ✅ **Yes — but only for Read 2**, and only if:
+
+-   You see **long polyA stretches** (e.g. ≥20 A’s) in Read 2
+
+-   FastQC shows **adapter content or poor quality at the 3′ end**
+
+-   You want to improve **alignment precision** or reduce mapping ambiguity
+
+we already confirmed \~3.7% of reads have `A{20,}` — that’s not extreme, but trimming could help.
+
+### ✂️ How to Trim PolyA with Cutadapt (Safely)
+
+Here’s a command that trims both adapters and long polyA tails from **Read 2 only**:
+
+``` bash
+cutadapt -a A{20} -o SRR28902977_2.clean.fastq SRR28902977_2.fastq 
+```
+
+-   `-a A{20}` trims any stretch of 20+ adenines from the **3′ end**
+
+-   You can combine this with adapter trimming if needed:
+
+``` bash
+cutadapt -a A{20} -o SRR28902977_2.final.fastq SRR28902977_2.trim.fastq
+```
+
+> ⚠️ **Do not run cutadapt on Read 1** — it contains barcode + UMI in fixed positions.
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ cutadapt -a A{20} -o SRR28902977_2.final.fastq SRR28902977_2.trim.fastq
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -a A{20} -o SRR28902977_2.final.fastq SRR28902977_2.trim.fastq
+Processing single-end reads on 1 core ...
+Done           00:00:03     1,981,135 reads @   1.9 µs/read;  31.87 M reads/minute
+Finished in 3.731 s (1.883 µs/read; 31.86 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:               1,981,135
+Reads with adapters:                   158,053 (8.0%)
+Reads written (passing filters):     1,981,135 (100.0%)
+
+Total basepairs processed:   198,113,500 bp
+Total written (filtered):    193,139,505 bp (97.5%)
+
+=== Adapter 1 ===
+
+Sequence: AAAAAAAAAAAAAAAAAAAA; Type: regular 3'; Length: 20; Trimmed: 158053 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20 bp: 2
+
+Bases preceding removed adapters:
+  A: 0.0%
+  C: 32.8%
+  G: 32.9%
+  T: 33.6%
+  none/other: 0.7%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       38314   30955.2 0       38314
+4       15280   7738.8  0       15280
+5       6549    1934.7  0       6549
+6       3361    483.7   0       3361
+7       1684    120.9   0       1684
+8       1057    30.2    0       1057
+9       1040    7.6     0       1040
+10      1981    1.9     1       900 1081
+...
+...
+```
+
+### ✅ What You Just Achieved
+
+-   **Trimmed polyA tails ≥20 bp** from Read 2 (`SRR28902977_2.fastq`)
+
+-   **8.2% of reads** had long polyA stretches removed — that’s a meaningful cleanup
+
+-   **No reads were discarded**, just cleaned — so you retain full coverage
+
+-   **Final output**: `SRR28902977_2.clean.fastq` — ready for mapping
+
+This step improves alignment precision and reduces noise from non-informative polyA sequences.
+
+## Check and Mapping
+
+Look at what we get,haha
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ ls
+SRR28902977_1.fastq  SRR28902977_2.fastq  SRR28902977_2.final.fastq  fastp.json  fastp_report.html  qc
+```
+
+At first we have to get the reference,it is funny that we could reuse it that we download in bulk RNAseq project.
+
+we **can absolutely reuse the reference files** from your bulk RNA-seq project for your scRNA-seq pipeline, as long as the reference matches the transcriptome you're working with (e.g. human GRCh38) and the format is compatible with your chosen tool.
+
+### ✅ What You Can Reuse
+
+From your bulk RNA folder, these are the key assets you can copy to `~/scRNAseqproject/data`:
+
+| File | Purpose | Use in scRNA-seq |
+|------------------------|------------------------|------------------------|
+| `gencode.v43.transcripts.fa.gz` | Transcriptome FASTA | Required for `kallisto index` |
+| `gencode_index/` | kallisto index directory | Use directly with `kallisto bus -i` |
+| `gencode.v43.annotation.gtf.gz` | Gene annotations | Needed for STARsolo or transcript-to-gene map |
+| `tx2gene.tsv` or `tx2gene_with_names.tsv` | Transcript-to-gene map | Used in `bustools count` |
+
+### 📁 Copy Command
+
+``` bash
+cp ~/bulk_RNA/data/data/gencode.v43.transcripts.fa.gz ~/scRNAseqproject/data/ cp -r ~/bulk_RNA/data/data/gencode_index ~/scRNAseqproject/data/ cp ~/bulk_RNA/data/data/gencode.v43.annotation.gtf.gz ~/scRNAseqproject/data/ cp ~/bulk_RNA/data/data/tx2gene.tsv ~/scRNAseqproject/data/ 
+```
+
+> You can rename `gencode_index` to something like `transcripts_index` if you prefer clarity.
+
+### 🧬 Tool Compatibility
+
+-   **kallisto\|bustools**: needs transcriptome index (`.idx`) and `tx2gene.tsv`
+
+-   **STARsolo**: needs genome FASTA + GTF (not transcriptome FASTA)
+
+    -   If you want to use STARsolo, you’ll need to build a **genome index** separately using `genome.fa` and `annotation.gtf`
+
+### #(Optional) Test on a small subset
+
+Run a quick small test (first 100k reads) to validate parameters and speed before the full run.
+
+``` bash
+# create small paired subset (100k reads => 400k lines)
+head -n 400000 SRR28902977_1.fastq  > small_R1.fastq
+head -n 400000 SRR28902977_2.final.fastq > small_R2.fastq
+
+# kallisto bus on the subset (10x v3 chemistry)
+kallisto bus -i transcripts.idx -o bus_test -x 10xv3 -t 8 small_R1.fastq small_R2.fastq
+```
+
+and we copy the data we need to the fucking path
+
+``` bash
+cp ~/bulk_RNA/data/data/gencode.v43.transcripts.fa.gz ~/scRNAseqproject/data/ cp -r ~/bulk_RNA/data/data/gencode_index ~/scRNAseqproject/data/
+```
+
+check the path,we do we have
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ ls SRR28902977_1.fastq        bus_test           gencode.v43.transcripts.fa.gz  small_R1.fastq SRR28902977_2.fastq        fastp.json         gencode_index                  small_R2.fastq SRR28902977_2.final.fastq  fastp_report.html  qc
+```
+
+but actually we could not use the genome index
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ kallisto bus -i gencode_index -o bus_out -x 10xv3 -t 8 \   SRR28902977_1.fastq SRR28902977_2.final.fastq  [bus] Note: Strand option was not specified; setting it to --fr-stranded for specified technology Error: incompatible indices. Found version 0, expected version 10
+```
+
+> **Error: incompatible indices. Found version 0, expected version 10**
+
+This means your `gencode_index` was built with an **older version of kallisto**, and your current `kallisto` binary (likely v0.48.0 or newer) expects a **newer index format**.
+
+### ✅ Fix: Rebuild the Index with Your Current kallisto Version
+
+Just re-run the index build using your current `kallisto`:
+
+``` bash
+kallisto index -i transcripts.idx gencode.v43.transcripts.fa.gz 
+```
+
+This will produce a new `transcripts.idx` compatible with your installed version.
+
+``` bash
+Rerun with index to regeneratejayz@localhost:~/scRNAseqproject/data$ kallisto index -i transcripts.idx gencode.v43.transcripts.fa.gz                           kallisto index -i transcripts.idx gencode.v43.transcripts.fa.gz  [build] loading fasta file gencode.v43.transcripts.fa.gz [build] k-mer length: 31 [build] warning: clipped off poly-A tail (longer than 10)         from 2020 target sequences [build] warning: replaced 4 non-ACGUT characters in the input sequence         with pseudorandom nucleotides [build] counting k-mers ... done. [build] building target de Bruijn graph ...  done [build] creating equivalence classes ...  done [build] target de Bruijn graph has 1633342 contigs and contains 150287276 k-mers  jayz@localhost:~/scRNAseqproject/data$ ls SRR28902977_1.fastq        bus_out     fastp_report.html              qc              transcripts.idx SRR28902977_2.fastq        bus_test    gencode.v43.transcripts.fa.gz  small_R1.fastq SRR28902977_2.final.fastq  fastp.json  gencode_index                  small_R2.fastq
+```
+
+Then rerun `kallisto bus`:
+
+``` bash
+kallisto bus -i transcripts.idx -o bus_out -x 10xv3 -t 8 \   SRR28902977_1.fastq SRR28902977_2
+```
+
+check
+
+1.  What is BUS?
+
+***BUS stands for Barcode, UMI, Set.***
+
+A BUS file is a special binary file format invented by the Pachter lab (same group behind kallisto) to represent single-cell RNA-seq reads compactly.
+
+Instead of storing all read sequences (huge FASTQ), it stores only the essential information needed for downstream analysis:
+
+1.Cell barcode (which cell the read came from)
+
+2.UMI (which molecule inside that cell)
+
+3.Equivalence class (Set) of transcripts that the read could map to
+
+So each line in the BUS file is like:
+
+``` bash
+[barcode]  [UMI]  [transcript equivalence class ID]  [count]
+```
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ kallisto bus -i transcripts.idx -o bus_out -x 10xv3 -t 8 \
+  SRR28902977_1.fastq SRR28902977_2.final.fastq
+
+[bus] Note: Strand option was not specified; setting it to --fr-stranded for specified technology
+[index] k-mer length: 31
+[index] number of targets: 252,913
+[index] number of k-mers: 150,287,276
+[index] number of equivalence classes: 1,090,375
+[quant] will process sample 1: SRR28902977_1.fastq
+                               SRR28902977_2.final.fastq
+[quant] finding pseudoalignments for the reads ... done
+[quant] processed 1,981,135 reads, 1,340,648 reads pseudoaligned
+```
+
+### ✅ What Just Happened
+
+-   **Input FASTQ files**:
+
+    -   `SRR28902977_1.fastq` → barcodes + UMIs
+
+    -   `SRR28902977_2.final.fastq` → trimmed cDNA reads
+
+-   **Transcriptome index**: `transcripts.idx` (built from GENCODE v43)
+
+-   **Technology**: `10xv3` → automatically set to `--fr-stranded`
+
+-   **Reads processed**: 1,981,135
+
+-   **Reads pseudoaligned**: 1,340,648 → **\~67.7% alignment rate**
+
+That’s a healthy pseudoalignment rate for scRNA-seq, especially after trimming polyA tails. You’re capturing real transcript signal.
+
+### 🧬 Next Step: Process with bustools
+
+Now let’s turn those pseudoalignments into a count matrix:
+
+bash
+
+``` bash
+cd bus_out
+
+sudo apt insatll bustools
+# Step 1: Correct barcodes
+bustools correct -w 10xv3_whitelist.txt -o output.correct.bus output.bus
+
+
+# Step 2: Sort BUS file
+bustools sort -t 4 -o output.sorted.bus output.correct.bus
+
+# Step 3: Count UMIs per gene per cell
+bustools count -o counts \
+  -g transcripts_to_genes.txt \
+  -e matrix.ec \
+  -t transcripts.txt \
+  --umi -m output.sorted.bus
+```
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ nano run_pipeline.sh
+```
+
+> Make sure you have `transcripts_to_genes.txt`
+
+So at first we have to get the `transcripts_to_genes.txt`
+
+efore you run `bustools count`, you need a **transcripts-to-genes map** file (`transcripts_to_genes.txt`). This file links each transcript ID to its corresponding gene ID, and it's essential for aggregating UMI counts at the gene level.
+
+### 🧬 How to Generate `transcripts_to_genes.txt` from a GTF File
+
+If you already have a GTF file (like `gencode.v43.annotation.gtf.gz`),
+
+i have download it in the bulk RNA seq and whatever,i just do it again(i just forget the path)
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_43/gencode.v43.annotation.gtf.gz
+--2025-09-24 11:24:48--  https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_43/gencode.v43.annotation.gtf.gz
+Resolving ftp.ebi.ac.uk (ftp.ebi.ac.uk)... 193.62.193.165
+Connecting to ftp.ebi.ac.uk (ftp.ebi.ac.uk)|193.62.193.165|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 49661267 (47M) [application/x-gzip]
+Saving to: ‘gencode.v43.annotation.gtf.gz’
+
+gencode.v43.annotation.gtf.gz 100%[=================================================>]  47.36M  1.96MB/s    in 51s
+
+2025-09-24 11:25:40 (958 KB/s) - ‘gencode.v43.annotation.gtf.gz’ saved [49661267/49661267]
+```
+
+here’s a simple and effective way to extract the mapping using `awk`:
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ zcat gencode.v43.annotation.gtf.gz | awk '$3 == "transcript" {
+  match($0, /transcript_id "([^"]+)"/, tid);
+  match($0, /gene_id "([^"]+)"/, gid);
+  if (tid[1] && gid[1]) print tid[1] "\t" gid[1];
+}' > transcripts_to_genes.txt
+```
+
+This command:
+
+-   Filters for lines where the feature type is `transcript`
+
+-   Extracts `transcript_id` and `gene_id` using regex
+
+-   Outputs a tab-separated file with two columns: `transcript_id<TAB>gene_id`
+
+``` bash
+lsjayz@localhost:~/scRNAseqproject/data$ ls
+SRR28902977_1.fastq        bus_test                       gencode.v43.transcripts.fa.gz  small_R1.fastq
+SRR28902977_2.fastq        fastp.json                     gencode_index                  small_R2.fastq
+SRR28902977_2.final.fastq  fastp_report.html              qc                             transcripts.idx
+bus_out                    gencode.v43.annotation.gtf.gz  run_pipeline.sh                transcripts_to_genes.txt
+jayz@localhost:~/scRNAseqproject/data$ head -n 20 transcripts_to_genes.txt
+ENST00000456328.2       ENSG00000290825.1
+ENST00000450305.2       ENSG00000223972.6
+ENST00000488147.1       ENSG00000227232.5
+ENST00000619216.1       ENSG00000278267.1
+ENST00000473358.1       ENSG00000243485.5
+ENST00000469289.1       ENSG00000243485.5
+ENST00000607096.1       ENSG00000284332.1
+ENST00000417324.1       ENSG00000237613.2
+ENST00000461467.1       ENSG00000237613.2
+ENST00000606857.1       ENSG00000268020.3
+ENST00000642116.1       ENSG00000290826.1
+ENST00000492842.2       ENSG00000240361.3
+ENST00000641515.2       ENSG00000186092.7
+ENST00000466430.5       ENSG00000238009.6
+ENST00000477740.5       ENSG00000238009.6
+ENST00000471248.1       ENSG00000238009.6
+ENST00000610542.1       ENSG00000238009.6
+ENST00000453576.2       ENSG00000238009.6
+ENST00000495576.1       ENSG00000239945.1
+ENST00000442987.3       ENSG00000233750.3
+```
+
+Make sure `10xv3_whitelist.txt` is present — or download it from this GitHub link if needed.
+
+### 🧬 What Is `10xv3_whitelist.txt`?
+
+It’s just a **list of valid cell barcodes** used in 10x Genomics v3 chemistry. During sequencing, each droplet gets a barcode — but not all barcodes are real. This file helps `bustools correct` distinguish **real barcodes** from sequencing noise.
+
+### ✅ Do You Need It?
+
+**Yes**, if you're using `bustools correct` — it won’t run properly without it. The whitelist ensures:
+
+-   You keep real cells
+
+-   You discard junk barcodes
+
+-   You get clean UMI counts per cell
+
+### 🖥️ How to Download `10xv3_whitelist.txt` in Bash
+
+You can grab the whitelist directly from the BUStools GitHub release page using `wget`:
+
+``` bash
+wget wget https://github.com/BUStools/getting_started/releases/download/sbooeshaghi_species_mixing/10xv3_whitelist.txt
+```
+
+and we could not download cuz the internet wall we all know that even though we have open the proxy port in windows,that is make no sense fuck
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ cp "/mnt/e/download edge/10xv3_whitelist.txt" ~/scRNAseqproject/data/
+jayz@localhost:~/scRNAseqproject/data$ ls
+10xv3_whitelist.txt        bus_out            gencode.v43.annotation.gtf.gz  run_pipeline.sh  transcripts_to_genes.txt
+SRR28902977_1.fastq        bus_test           gencode.v43.transcripts.fa.gz  small_R1.fastq
+SRR28902977_2.fastq        fastp.json         gencode_index                  small_R2.fastq
+SRR28902977_2.final.fastq  fastp_report.html  qc                             transcripts.idx
+jayz@localhost:~/scRNAseqproject/data$ head -n 20 10xv3_whitelist.txt
+AAACCCAAGAAACACT
+AAACCCAAGAAACCAT
+AAACCCAAGAAACCCA
+AAACCCAAGAAACCCG
+AAACCCAAGAAACCTG
+AAACCCAAGAAACGAA
+AAACCCAAGAAACGTC
+AAACCCAAGAAACTAC
+AAACCCAAGAAACTCA
+AAACCCAAGAAACTGC
+AAACCCAAGAAACTGT
+AAACCCAAGAAAGAAC
+AAACCCAAGAAAGACA
+AAACCCAAGAAAGCCT
+AAACCCAAGAAAGCGA
+AAACCCAAGAAAGGAT
+AAACCCAAGAAAGGTA
+AAACCCAAGAAAGTCT
+AAACCCAAGAAATAGG
+AAACCCAAGAAATCCA
+```
+
+Boom — success, sh. That file is locked and loaded:
+
+-   ✅ **Size**: 111 MB
+
+-   ✅ **Lines**: 6,794,880 barcodes
+
+-   ✅ **Permissions**: Executable (`-rwxr-xr-x`) — though you probably don’t need that for a text file
+
+### 🧠 Quick Tips
+
+If you want to clean up the permissions (since it's not a script), you can run:
+
+``` bash
+chmod 644 ~/scRNAseqproject/data/10xv3_whitelist.txt 
+```
+
+That sets it to read/write for you, read-only for others — standard for data files.
+
+check the bus-out put
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ find ~/scRNAseqproject -name "*.bus"
+/home/jayz/scRNAseqproject/data/input.bus
+/home/jayz/scRNAseqproject/data/bus_out/output.bus
+/home/jayz/scRNAseqproject/data/bus_out/output.sorted.bus
+/home/jayz/scRNAseqproject/data/bus_out/output.correct.bus
+/home/jayz/scRNAseqproject/data/output.correct.bus
+jayz@localhost:~/scRNAseqproject/data$ bustools text -o temp.txt ~/scRNAseqproject/data/bus_out/output.bus
+head temp.txt
+Read in 1340648 BUS records
+CGATAAGTCCGCGAGT        AACCATGTATAT    228411  1
+TGACGGGCATAGGTTC        ACCGCTAACTAT    252897  1
+TGTAACGAGAATCGTA        GTCAGGTCGTTG    252881  1
+CGCTCAGAGTCCTGCG        TAATAGATACGA    252898  1
+TGATTCTGTTACGCCG        AAGCATTCACGT    256871  1
+GGGTGAAAGACGGATC        GCAGTTCAGCAC    252910  1
+TGCGGCATCTTTGCGC        TGGCTAATTCAG    252879  1
+GGTGCAGGTGGTCTAT        TCTTCACCTTGC    935610  1
+AGGCCTCGTTATGGTC        GACTGCTTAGTC    1001402 1
+AGCCCAAGTAGCGCCT        GGTCTTTATAAT    252877  1
+```
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ bustools text -o temp.txt ~/scRNAseqproject/data/bus_out/output.bus
+head temp.txt
+Read in 1340648 BUS records
+CGATAAGTCCGCGAGT        AACCATGTATAT    228411  1
+TGACGGGCATAGGTTC        ACCGCTAACTAT    252897  1
+TGTAACGAGAATCGTA        GTCAGGTCGTTG    252881  1
+CGCTCAGAGTCCTGCG        TAATAGATACGA    252898  1
+TGATTCTGTTACGCCG        AAGCATTCACGT    256871  1
+GGGTGAAAGACGGATC        GCAGTTCAGCAC    252910  1
+TGCGGCATCTTTGCGC        TGGCTAATTCAG    252879  1
+GGTGCAGGTGGTCTAT        TCTTCACCTTGC    935610  1
+AGGCCTCGTTATGGTC        GACTGCTTAGTC    1001402 1
+AGCCCAAGTAGCGCCT        GGTCTTTATAAT    252877  1
+jayz@localhost:~/scRNAseqproject/data$ bustools correct \
+  -w ~/scRNAseqproject/data/10xv3_whitelist.txt \
+  -o ~/scRNAseqproject/data/bus_out/output.correct.bus \
+  ~/scRNAseqproject/data/bus_out/output.bus
+Found 6794880 barcodes in the on-list
+Processed 1340648 BUS records
+In on-list = 1298557
+Corrected    = 4333
+Uncorrected  = 37758
+```
+
+That’s a clean correction run, sh — and the stats tell a compelling story:
+
+### ✅ Correction Summary
+
+| Metric        | Count     | Interpretation                               |
+|---------------|-----------|----------------------------------------------|
+| Total records | 1,340,648 | All BUS entries processed                    |
+| In whitelist  | 1,298,557 | \~97% matched known 10x barcodes — excellent |
+| Corrected     | 4,333     | Slight barcode errors fixed via whitelist    |
+| Uncorrected   | 37,758    | \~2.8% couldn’t be matched or corrected      |
+
+### 🧠 What This Means
+
+-   Your whitelist (`10xv3_whitelist.txt`) is working perfectly
+
+-   The vast majority of barcodes are either exact matches or close enough to correct
+
+-   Only a small fraction (\~2.8%) were uncorrectable — likely low-quality or background reads
+
+This is textbook 10x data behavior. You’re ready to move on to sorting and counting.
+
+### 🛠 Next Step: Sort
+
+bash
+
+``` bash
+bustools sort \
+  -t 8 \
+  -o ~/scRNAseqproject/data/bus_out/output.sorted.bus \
+  ~/scRNAseqproject/data/bus_out/output.correct.bus
+```
+
+Then you’ll be ready to generate your gene × cell matrix with `bustools count`.
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data$ cd bus_out
+jayz@localhost:~/scRNAseqproject/data/bus_out$ ls
+matrix.ec  output.bus  output.correct.bus  output.sorted.bus  run_info.json  transcripts.txt
+```
+
+That output is exactly what we expect, sh — the `.bus` file is **binary**, so trying to `head` it directly gives you garbled characters. That’s not corruption — it’s just not human-readable.
+
+### 🧠 What You’re Seeing
+
+-   `output.sorted.bus` is a **binary BUS file**
+
+-   It contains structured records: **barcode**, **UMI**, **equivalence class**, and **count**
+
+-   You need to use `bustools text` to convert it to readable format
+
+### ✅ View as Text
+
+Run this:
+
+``` bash
+bustools text -o sorted.txt output.sorted.bus
+head sorted.txt
+```
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data/bus_out$ bustools text -o sorted.txt output.sorted.bus
+Read in 1297381 BUS records
+jayz@localhost:~/scRNAseqproject/data/bus_out$ head sorted.txt
+AAACCCAAGACATCCT        AATTACATAAAG    252891  1
+AAACCCAAGACATCCT        TTATTCCTCTGT    928978  1
+AAACCCAAGACCATGG        CTTCAATAGTCT    317336  1
+AAACCCAAGACTCGAG        CATCGCACATTG    264651  1
+AAACCCAAGACTCGAG        GTCATACAATGC    115315  1
+AAACCCAAGAGCAGTC        AAGTTCAGTTCC    252879  1
+AAACCCAAGAGCAGTC        TAATGAACATTG    252877  1
+AAACCCAAGATAGCAT        AAAACCGGTCAT    252897  1
+AAACCCAAGATAGCAT        AAACCTGGCAAT    29797   1
+AAACCCAAGATAGCAT        AAACCTGGCAAT    1090452 1
+```
+
+### What You’re Seeing
+
+Each line in `sorted.txt` is a **BUS record**, now sorted and corrected:
+
+``` bash
+[Barcode]              [UMI]           [Equivalence Class ID] [Count]
+AAACCCAAGACATCCT       AATTACATAAAG    252891                 1 
+```
+
+-   **Barcode**: 16 bp cell barcode (e.g. `AAACCCAAGACATCCT`)
+
+-   **UMI**: 12 bp unique molecular identifier (e.g. `AATTACATAAAG`)
+
+-   **EC ID**: Transcript equivalence class (e.g. `252891`)
+
+-   **Count**: Number of times this barcode–UMI–EC combo was seen (usually 1)
+
+### 🧠 What This Tells You
+
+-   You’ve got **real barcodes** — many repeated across records
+
+-   UMIs are diverse — good sign of unique molecules
+
+-   ECs are assigned — meaning kallisto successfully mapped reads to transcript sets
+
+This is the raw material for your **gene × cell matrix**.
+
+### 🛠 Next Step: Count
+
+If you haven’t already, run:
+
+``` bash
+bustools count \
+  -o counts \
+  -g ~/scRNAseqproject/data/transcripts_to_genes.txt \
+  -e matrix.ec \
+  -t transcripts.txt \
+  --umi \
+  -m output.sorted.bus
+```
+
+This command:
+
+1.  **Reads** your sorted BUS file (`output.sorted.bus`)
+
+2.  **Maps** equivalence classes (`matrix.ec`) to transcripts (`transcripts.txt`)
+
+3.  **Maps** transcripts to genes (`transcripts_to_genes.txt`)
+
+4.  **Collapses UMIs** per gene per cell (`--umi`)
+
+5.  **Outputs** a sparse matrix in Matrix Market format
+
+This will generate:
+
+-   `counts.mtx` — sparse matrix of gene counts
+
+-   `counts.genes.txt` — gene IDs
+
+-   `counts.barcodes.txt` — cell barcodes
+
+Unfortunately, `bustools count` is **single-threaded only** — no `-T`, no `--threads`. So:
+
+-   You just need to run it **as-is**, without trying to parallelize
+
+-   It’s optimized for speed and memory, so even on one thread it usually finishes in a few minutes
+
+### 🧠 What’s Wrong with `matrix.ec`
+
+Your ECs look like this:
+
+代码
+
+``` bash
+99994,171608 99994,128297,128708,128709,191217,191218,191220 
+```
+
+These are **transcript indices**, but they’re way too large — `transcripts.txt` only has 252,913 entries, so `191217` is valid, but `99999` is suspicious. Worse, many ECs contain **only one transcript**, which suggests poor pseudoalignment.
+
+This usually means:
+
+-   The **kallisto index** was built incorrectly
+
+-   Or the **FASTQ reads** didn’t pseudoalign well (e.g. bad trimming, wrong layout, poor quality)
+
+``` bash
+ kallisto index -i transcripts.idx gencode.v43.transcripts.fa.gz
+
+[build] loading fasta file gencode.v43.transcripts.fa.gz
+[build] k-mer length: 31
+[build] warning: clipped off poly-A tail (longer than 10)
+        from 2020 target sequences
+[build] warning: replaced 4 non-ACGUT characters in the input sequence
+        with pseudorandom nucleotides
+[build] counting k-mers ... done.
+[build] building target de Bruijn graph ...  done
+[build] creating equivalence classes ...  done
+[build] target de Bruijn graph has 1633342 contigs and contains 150287276 k-mers
+```
+
+#### 2. **Rerun kallisto bus**
+
+Use your trimmed FASTQ files:
+
+bash
+
+```         
+kallisto bus \
+  -i transcripts.idx \
+  -o bus_out \
+  -x 10xv3 \
+  -t 4 \
+  SRR28902977_1.fastq SRR28902977_2.final.fastq
+```
+
+> Make sure R2 is properly trimmed — this affects pseudoalignment.
+
+```         
+jayz@localhost:~/scRNAseqproject/data$ kallisto bus \
+  -i transcripts.idx \
+  -o bus_out \
+  -x 10xv3 \
+  -t 4 \
+  SRR28902977_1.fastq SRR28902977_2.final.fastq
+
+[bus] Note: Strand option was not specified; setting it to --fr-stranded for specified technology
+[index] k-mer length: 31
+[index] number of targets: 252,913
+[index] number of k-mers: 150,287,276
+[index] number of equivalence classes: 1,090,375
+[quant] will process sample 1: SRR28902977_1.fastq
+                               SRR28902977_2.final.fastq
+[quant] finding pseudoalignments for the reads ... done
+[quant] processed 1,981,135 reads, 1,340,648 reads pseudoaligned
+```
+
+#### 3. **Inspect the new BUS file**
+
+Convert to text and check ECs:
+
+bash
+
+```         
+bustools text -o temp.txt bus_out/output.bus
+head temp.txt
+```
+
+```         
+jayz@localhost:~/scRNAseqproject/data$ bustools text -o temp.txt bus_out/output.bus
+head temp.txt
+Read in 1340648 BUS records
+CGATAAGTCCGCGAGT        AACCATGTATAT    228411  1
+TGACGGGCATAGGTTC        ACCGCTAACTAT    252897  1
+TGTAACGAGAATCGTA        GTCAGGTCGTTG    252881  1
+CGCTCAGAGTCCTGCG        TAATAGATACGA    252898  1
+TGATTCTGTTACGCCG        AAGCATTCACGT    256871  1
+GGGTGAAAGACGGATC        GCAGTTCAGCAC    252910  1
+TGCGGCATCTTTGCGC        TGGCTAATTCAG    252879  1
+GGTGCAGGTGGTCTAT        TCTTCACCTTGC    935610  1
+AGGCCTCGTTATGGTC        GACTGCTTAGTC    1001402 1
+AGCCCAAGTAGCGCCT        GGTCTTTATAAT    252877  1
+```
+
+inspect matrix.ec
+
+``` bash
+jayz@localhost:~/scRNAseqproject/data/bus_out$ head -n 20  matrix.ec
+0       0
+1       1
+2       2
+3       3
+4       4
+5       5
+6       6
+7       7
+8       8
+9       9
+10      10
+11      11
+12      12
+13      13
+14      14
+15      15
+16      16
+17      17
+18      18
+19      19
+```
+
+``` bash
+jayz@localhost:~/scRNAseqproject$ tree
+.
+└── data
+    ├── 10xv3_whitelist.txt
+    ├── SRR28902977_1.fastq
+    ├── SRR28902977_2.fastq
+    ├── SRR28902977_2.final.fastq
+    ├── bus_out
+    │   ├── counts.mtx
+    │   ├── matrix.ec
+    │   ├── output.bus
+    │   ├── output.correct.bus
+    │   ├── output.sorted.bus
+    │   ├── run_info.json
+    │   ├── sorted.txt
+    │   ├── test.bus
+    │   ├── test_counts.mtx
+    │   └── transcripts.txt
+    ├── bus_test
+    ├── fastp.json
+    ├── fastp_report.html
+    ├── gencode.v43.annotation.gtf.gz
+    ├── gencode.v43.transcripts.fa.gz
+    ├── gencode_index
+    │   ├── complete_ref_lens.bin
+    │   ├── ctable.bin
+    │   ├── ctg_offsets.bin
+    │   ├── duplicate_clusters.tsv
+    │   ├── info.json
+    │   ├── mphf.bin
+    │   ├── pos.bin
+    │   ├── pre_indexing.log
+    │   ├── rank.bin
+    │   ├── refAccumLengths.bin
+    │   ├── ref_indexing.log
+    │   ├── reflengths.bin
+    │   ├── refseq.bin
+    │   ├── seq.bin
+    │   └── versionInfo.json
+    ├── input.bus
+    ├── output.correct.bus
+    ├── output.sorted.bus
+    ├── qc
+    │   ├── SRR28902977_2_fastqc.html
+    │   └── SRR28902977_2_fastqc.zip
+    ├── run_pipeline.sh
+    ├── small_R1.fastq
+    ├── small_R2.fastq
+    ├── temp.txt
+    ├── transcripts.idx
+    └── transcripts_to_genes.txt
+
+7 directories, 43 files
+```
+
+```         
+7 directories, 43 files
+jayz@localhost:~/scRNAseqproject$ cd ~/scRNAseqproject/data
+
+# remove duplicate BUS outputs
+rm -f input.bus output.correct.bus output.sorted.bus
+
+# remove test/debug files
+rm -f small_R1.fastq small_R2.fastq temp.txt
+rm -rf bus_test
+
+# optional: clean inside bus_out
+cd bus_out
+rm -f sorted.txt test.bus test_counts.mtx
+rm: cannot remove 'input.bus': Is a directory
+jayz@localhost:~/scRNAseqproject/data/bus_out$ tree
+.
+├── counts.mtx
+├── matrix.ec
+├── output.bus
+├── output.correct.bus
+├── output.sorted.bus
+├── run_info.json
+└── transcripts.txt
+
+1 directory, 7 files
+```

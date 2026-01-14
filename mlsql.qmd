@@ -1,0 +1,780 @@
+first to load the data
+
+```{python}
+import pandas as pd
+from sqlalchemy import create_engine
+import duckdb
+import io
+```
+
+```{python}
+clinical_outfile = r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\clinical_metadata.csv"
+clinical_df = pd.read_csv(clinical_outfile)
+# Load RNA expression matrix
+expression_file = "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/rnaexp.csv"
+expression_df = pd.read_csv(expression_file, index_col=0)
+print("✅ Expression matrix loaded. Shape:", expression_df.shape)
+
+# Optional: Preview
+print(expression_df.iloc[:5, :5])
+print(clinical_df.iloc[:5, :5])
+```
+
+```{python}
+clinical_ids = set(clinical_df['case_id'])
+expression_ids = set(expression_df.columns)
+overlap = clinical_ids.intersection(expression_ids)
+print(f"🧪 Overlapping samples: {len(overlap)}")
+```
+
+```{python}
+print(clinical_df.columns)
+```
+
+# ML with clinical data and genes to predict
+
+## 🧬 Step 1: Define Your Gene List
+
+```{python}
+gene_list = [
+    'HSD17B14', 'CLTA', 'C9orf72', 'TTC39A', 'C4orf48', 'TESK1', 'FAM241B',
+    'C5', 'TP53I3', 'SLC39A4', 'CLDN3', 'NRIP3', 'PYCR1', 'MT1M', 'H19',
+    'PSD3', 'ETNK1', 'HMGB3', 'TRPM2', 'MELK', 'HILPDA', 'ATP23', 'IFFO2',
+    'TMEM80', 'PRAG1', 'SVIP'
+]
+gene_list_sql = ', '.join([f"'{gene}'" for gene in gene_list])
+```
+
+## 🧪 Step 2: Unpivot RNA Expression Matrix in DuckDB
+
+```{python}
+# --- 2. DuckDB Setup ---
+
+# Create an in-memory database or a file-backed one ('path/to/my.duckdb')
+con = duckdb.connect(database=':memory:', read_only=False)
+print("✅ DuckDB connection established (in-memory).")
+
+# --- Loading Data into DuckDB ---
+# DuckDB can read directly from pandas DataFrames using the 'register' function.
+
+# Register the DataFrames as temporary tables in DuckDB
+con.register('clinical_metadata_db', clinical_df)
+con.register('rna_expression_matrix_db', expression_df)
+
+print("✅ DataFrames registered as tables in DuckDB.")
+
+# --- Verification Query in DuckDB ---
+# Example: Querying the registered tables
+duckdb_query = """
+SELECT t1.case_id, t1.vital_status, t2."TSPAN6", t2."DPM1"
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_matrix_db t2
+    ON t1.case_id = t2.case_id  -- Note: we'll need to ensure case_id is a column in expression_df for a direct join!
+LIMIT 5;
+"""
+# Based on wer data structure, we might need to UNPIVOT the RNA data first in DuckDB
+# The join key is `case_id` from clinical_df and the column *names* (TCGA-...) in expression_df.
+
+print("\n--- DuckDB Verification Query (Sample) ---")
+```
+
+```{python}
+expression_cols = [col for col in expression_df.columns if col.startswith('TCGA-')]
+#This grabs all sample columns (e.g. TCGA-18-3406, TCGA-18-3407) from your expression matrix.
+unpivot_query = f"""
+CREATE TEMP TABLE rna_expression_unpivoted AS
+SELECT
+    gene_name,
+    s.case_id AS sample_id,
+    s.expression AS expression_value
+FROM (
+    SELECT
+        gene_name,
+        unnest(list_value(
+            {', '.join([
+                f"struct_pack(case_id := '{col}', expression := \"{col}\")"
+                for col in expression_cols
+            ])}
+        )) AS s
+    FROM rna_expression_matrix_db
+);
+"""
+con.execute(unpivot_query)
+```
+
+This part:
+
+``` python
+f"struct_pack(case_id := '{col}', expression := \"{col}\")" 
+```
+
+is inside a Python f-string. Here's what each part means:
+
+-   `'case_id := '{col}'` → sets the sample ID as a string (e.g. `'TCGA-18-3406'`)
+
+-   `expression := \"{col}\"` → references the actual column in DuckDB
+
+You're building a **Python string** that will be embedded inside a **SQL string**. The backslash escapes the double quotes so Python doesn’t treat them as the end of the string
+
+### What This Does:
+
+-   `struct_pack(...)` creates a mini-record for each sample: `{case_id: 'TCGA-...', expression: value}`
+
+-   `list_value(...)` builds a list of these structs for each gene
+
+-   `unnest(...)` explodes that list into rows
+
+-   Final result: one row per `(gene_name, sample_id, expression_value)`
+
+## 🔗 Step 3: Join with Clinical Metadata
+
+```{python}
+survival_query = f"""
+SELECT
+    t1.case_id,
+    t1.vital_status,
+    COALESCE(t1.days_to_death, t1.days_to_last_followup) AS survival_days,
+    t1.age_at_dx,
+    t1.stage,
+    t1.gender,
+    t1.tumor_status,
+    t1.smoking_history,
+    t1.pack_years_smoked,
+    t2.gene_name,
+    t2.expression_value
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_unpivoted t2
+    ON t1.case_id = t2.sample_id
+WHERE t2.gene_name IN ({gene_list_sql})
+"""
+survival_df_long = con.execute(survival_query).fetchdf()
+```
+
+## 📊 Step 4: Pivot to Wide Format
+
+```{python}
+
+survival_df = survival_df_long.pivot_table(
+    index=[
+        'case_id', 'vital_status', 'survival_days', 'age_at_dx',
+        'stage', 'gender', 'tumor_status', 'smoking_history', 'pack_years_smoked'
+    ],
+    columns='gene_name',
+    values='expression_value'
+).reset_index()
+
+```
+
+## 💾 Step 5: Save to CSV
+
+```{python}
+survival_df.to_csv(r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\survival_data_27genes.csv", index=False)
+print("✅ Survival-ready dataset with 27 genes and full clinical metadata saved.")
+```
+
+### 🔍 Root Cause: Gene Filtering + Expression Missingness
+
+Even though you're preserving clinical samples and deferring imputation, your query still includes this line:
+
+``` sql
+WHERE t2.gene_name IN ({gene_list_sql}) 
+```
+
+This filters the RNA expression to only your **27 selected genes**. So if a sample is **missing expression for even one of those genes**, it won’t appear in the long-format result. And since you're pivoting afterward, only samples with **at least one matching expression value** survive.
+
+### 🧠 What’s Actually Happening
+
+-   You have \~500 clinical samples.
+
+-   But only 311 have **expression values for at least one of your 27 genes**.
+
+-   The rest are dropped during the `INNER JOIN` or because they don’t match the `WHERE` clause.
+
+### If we want to get the overlapping data
+
+```{python}
+# --- 2. DuckDB Setup ---
+
+# Create an in-memory database or a file-backed one ('path/to/my.duckdb')
+con = duckdb.connect(database=':memory:', read_only=False)
+print("✅ DuckDB connection established (in-memory).")
+
+# --- Loading Data into DuckDB ---
+# DuckDB can read directly from pandas DataFrames using the 'register' function.
+
+# Register the DataFrames as temporary tables in DuckDB
+con.register('clinical_metadata_db', clinical_df)
+con.register('rna_expression_matrix_db', expression_df)
+
+print("✅ DataFrames registered as tables in DuckDB.")
+
+# --- Verification Query in DuckDB ---
+# Example: Querying the registered tables
+duckdb_query = """
+SELECT t1.case_id, t1.vital_status, t2."TSPAN6", t2."DPM1"
+FROM clinical_metadata_db t1
+INNER JOIN rna_expression_matrix_db t2
+    ON t1.case_id = t2.case_id  -- Note: we'll need to ensure case_id is a column in expression_df for a direct join!
+LIMIT 5;
+"""
+# Based on wer data structure, we might need to UNPIVOT the RNA data first in DuckDB
+# The join key is `case_id` from clinical_df and the column *names* (TCGA-...) in expression_df.
+
+print("\n--- DuckDB Verification Query (Sample) ---")
+```
+
+### ✅ Step 1: Unpivot RNA Expression Matrix (same as before)
+
+```{python}
+expression_cols = [col for col in expression_df.columns if col.startswith('TCGA-')]
+
+unpivot_query = f"""
+CREATE TEMP TABLE rna_expression_unpivoted AS
+SELECT
+    gene_name,
+    s.case_id AS sample_id,
+    s.expression AS expression_value
+FROM (
+    SELECT
+        gene_name,
+        unnest(list_value(
+            {', '.join([
+                f"struct_pack(case_id := '{col}', expression := \"{col}\")"
+                for col in expression_cols
+            ])}
+        )) AS s
+    FROM rna_expression_matrix_db
+);
+"""
+con.execute(unpivot_query)
+```
+
+### 🔗 Step 2: LEFT JOIN with Clinical Metadata
+
+```{python}
+gene_list_sql = ', '.join([f"'{gene}'" for gene in gene_list])
+
+survival_query = f"""
+SELECT
+    t1.case_id,
+    t1.vital_status,
+    t1.age_at_dx,
+    t1.stage,
+    t1.gender,
+    t1.tumor_status,
+    t1.smoking_history,
+    t1.pack_years_smoked,
+    t2.gene_name,
+    t2.expression_value
+FROM clinical_metadata_db t1
+LEFT JOIN rna_expression_unpivoted t2
+    ON t1.case_id = t2.sample_id
+WHERE t2.gene_name IN ({gene_list_sql})
+"""
+survival_df_long = con.execute(survival_query).fetchdf()
+```
+
+### 📊 Pivot with Minimal Index, Add Clinical Later
+
+```{python}
+pivot_df = survival_df_long.pivot_table(
+    index=['case_id'],
+    columns='gene_name',
+    values='expression_value'
+).reset_index()
+
+# Merge back clinical metadata
+clinical_cols = ['case_id', 'vital_status', 'age_at_dx',
+                 'stage', 'gender', 'tumor_status', 'smoking_history', 'pack_years_smoked']
+clinical_subset = survival_df_long[clinical_cols].drop_duplicates(subset='case_id')
+
+survival_df = pivot_df.merge(clinical_subset, on='case_id', how='left')
+
+```
+
+```{python}
+survival_df.to_csv(r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\survival_data_27genes2.csv", index=False)
+print("✅ Survival-ready dataset with 27 genes and full clinical metadata saved.")
+```
+
+## 🧼 Step 1: Preprocess Stage and Event
+
+```{python}
+import pandas as pd
+
+df = pd.read_csv(r"E:\acode\wsl\data2\GDCdata\TCGA-LUSC\survival_data_27genes.csv")
+
+# Simplify stage
+def simplify_stage(stage):
+    if pd.isna(stage):
+        return "Unknown"
+    elif stage in ["Stage I", "Stage IA", "Stage IB", "Stage II", "Stage IIA", "Stage IIB"]:
+        return "Early/Local (Stage I-II)"
+    elif stage in ["Stage III", "Stage IIIA", "Stage IIIB", "Stage IV", "Stage IVA", "Stage IVB"]:
+        return "Advanced (Stage III IV)"
+    else:
+        return "Other/Unknown"
+
+df["simplified_stage"] = df["stage"].apply(simplify_stage)
+
+# Create binary event
+df["event"] = df["vital_status"].map({"Dead": 1, "Alive": 0})
+```
+
+check the data
+
+```{python}
+print(df.head(5))
+print(df.columns)
+```
+
+``` python
+>>> print(df.head(5))
+... print(df.columns)
+        case_id vital_status  ...          simplified_stage  event
+0  TCGA-18-3406         Dead  ...  Early/Local (Stage I-II)      1
+1  TCGA-18-3407         Dead  ...  Early/Local (Stage I-II)      1
+2  TCGA-18-3408        Alive  ...  Early/Local (Stage I-II)      0
+3  TCGA-18-3409        Alive  ...  Early/Local (Stage I-II)      0
+4  TCGA-18-3411        Alive  ...   Advanced (Stage III IV)      0
+
+[5 rows x 37 columns]
+Index(['case_id', 'vital_status', 'survival_days', 'age_at_dx', 'stage',
+       'gender', 'tumor_status', 'smoking_history', 'pack_years_smoked', 'ATP23',
+       'C4orf48', 'C5', 'C9orf72', 'CLDN3', 'CLTA', 'ETNK1', 'FAM241B', 'H19',
+       'HILPDA', 'HMGB3', 'HSD17B14', 'IFFO2', 'MELK', 'MT1M', 'NRIP3', 'PRAG1',
+       'PSD3', 'PYCR1', 'SLC39A4', 'SVIP', 'TESK1', 'TMEM80', 'TP53I3', 'TRPM2',
+       'TTC39A', 'simplified_stage', 'event'],
+      dtype='object')
+```
+
+### 🧹 Step 1: Drop Unnecessary Columns
+
+Since `vital_status` and `stage` are now encoded into `event` and `simplified_stage`, you can drop them:
+
+```{python}
+df = df.drop(columns=["vital_status", "stage"])
+```
+
+```{python}
+df = df.drop(columns=["survival_days"])
+```
+
+### 🔍 Step 2: Check Unique Values for Categorical Features
+
+This helps you understand how to encode them:
+
+```{python}
+print("Gender:", df["gender"].unique())
+print("Tumor Status:", df["tumor_status"].unique())
+print("Simplified Stage:", df["simplified_stage"].unique())
+```
+
+``` python
+Gender: ['MALE' 'FEMALE']
+Tumor Status: ['WITH TUMOR' 'TUMOR FREE']
+Simplified Stage: ['Early/Local (Stage I-II)' 'Advanced (Stage III IV)']
+```
+
+### 🔄 Step 3: Encode Categorical Variables
+
+You can use label encoding or one-hot encoding. For Discriminant Analysis, label encoding is often sufficient:
+
+```{python}
+from sklearn.preprocessing import LabelEncoder
+
+for col in ["gender", "tumor_status", "simplified_stage"]:
+    le = LabelEncoder()
+    df[col] = le.fit_transform(df[col])
+```
+
+This will convert:
+
+-   `gender`: MALE → 1, FEMALE → 0
+
+-   `tumor_status`: WITH TUMOR → 1, TUMOR FREE → 0
+
+-   `simplified_stage`: Encoded numerically (e.g., Early/Local → 0, Advanced → 1, etc.)
+
+### 🧪 Step 4: Prepare Features and Target
+
+Now you're ready to split features and target:
+
+```{python}
+X = df.drop(columns=["case_id", "event"])  
+# Drop ID and target 
+y = df["event"]
+```
+
+check the data right now
+
+```{python}
+print(X.head(5))
+print(X.columns)
+```
+
+## pick the important features
+
+## 🌲 Option 1: Random Forest Feature Importance
+
+Random Forests are great for estimating feature relevance, even if you're ultimately using Discriminant Analysis. Here's how to extract importance scores:
+
+```{python}
+from sklearn.ensemble import RandomForestClassifier
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Train a Random Forest
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X, y)
+
+# Get feature importances
+importances = pd.Series(rf.feature_importances_, index=X.columns)
+importances_sorted = importances.sort_values(ascending=False)
+
+# Plot top features
+plt.figure(figsize=(10, 6))
+importances_sorted.head(20).plot(kind='barh')
+plt.title("Top 20 Feature Importances (Random Forest)")
+plt.xlabel("Importance Score")
+plt.gca().invert_yaxis()
+plt.tight_layout()
+plt.show()
+```
+
+![](plot-30.png)
+
+check
+
+```{python}
+print(importances_sorted)
+```
+
+``` python
+>>> print(importances_sorted)
+tumor_status         0.125528
+H19                  0.040419
+pack_years_smoked    0.039808
+age_at_dx            0.039261
+C4orf48              0.037028
+CLDN3                0.035837
+SLC39A4              0.034131
+C5                   0.033265
+ATP23                0.033165
+PRAG1                0.032984
+TMEM80               0.032625
+MELK                 0.032337
+SVIP                 0.032040
+C9orf72              0.031263
+TESK1                0.030438
+HSD17B14             0.030422
+FAM241B              0.028915
+ETNK1                0.028655
+TTC39A               0.028447
+PYCR1                0.028165
+PSD3                 0.027984
+NRIP3                0.027635
+CLTA                 0.026768
+TP53I3               0.026439
+HMGB3                0.026315
+TRPM2                0.026061
+HILPDA               0.024921
+MT1M                 0.023093
+IFFO2                0.021146
+smoking_history      0.006051
+simplified_stage     0.004483
+gender               0.004372
+dtype: float64
+```
+
+## 📊 Option 2: Correlation with Target (`event`)
+
+This gives a quick statistical view of how each feature relates to the binary outcome:
+
+```{python}
+correlations = df.drop(columns=["case_id"]).corr()["event"].abs().sort_values(ascending=False)
+print(correlations.head(20))
+```
+
+``` python
+... print(correlations.head(20))
+event               1.000000
+tumor_status        0.505101
+age_at_dx           0.141032
+H19                 0.124147
+simplified_stage    0.115560
+gender              0.088613
+HSD17B14            0.080875
+CLDN3               0.076875
+TRPM2               0.072143
+PYCR1               0.070471
+TMEM80              0.070332
+IFFO2               0.060668
+FAM241B             0.054786
+SVIP                0.054521
+MELK                0.051436
+NRIP3               0.051194
+HMGB3               0.050364
+ETNK1               0.045469
+TP53I3              0.042114
+C5                  0.039073
+Name: event, dtype: float64
+```
+
+This helps you spot features with strong linear relationships to the target.
+
+## 🧪 Step 2: LASSO for Gene Selection
+
+```{python}
+from sklearn.linear_model import LassoCV
+from sklearn.preprocessing import StandardScaler
+gene_list = [
+    'HSD17B14', 'CLTA', 'C9orf72', 'TTC39A', 'C4orf48', 'TESK1', 'FAM241B',
+    'C5', 'TP53I3', 'SLC39A4', 'CLDN3', 'NRIP3', 'PYCR1', 'MT1M', 'H19',
+    'PSD3', 'ETNK1', 'HMGB3', 'TRPM2', 'MELK', 'HILPDA', 'ATP23', 'IFFO2',
+    'TMEM80', 'PRAG1', 'SVIP'
+]
+
+gene_cols = [col for col in df.columns if col in gene_list]  # your 27 genes
+X = df[gene_cols]
+y = df["event"]
+
+# Normalize gene expression
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# LASSO with cross-validation
+lasso = LassoCV(cv=5, random_state=42)
+lasso.fit(X_scaled, y)
+
+# Extract selected genes
+selected_genes = [gene for gene, coef in zip(gene_cols, lasso.coef_) if abs(coef) > 1e-4]
+print("🧬 Selected genes via LASSO:", selected_genes)
+```
+
+## 📊 Step 3: Check Relevance to Stage
+
+```{python}
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+for gene in selected_genes:
+    plt.figure(figsize=(6, 4))
+    sns.boxplot(x="simplified_stage", y=gene, data=df)
+    plt.title(f"{gene} Expression vs. Stage")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+```
+
+```{python}
+from sklearn.linear_model import ElasticNetCV
+
+enet = ElasticNetCV(cv=5, l1_ratio=0.7, random_state=42)
+enet.fit(X_scaled, y)
+selected_genes = [gene for gene, coef in zip(gene_cols, enet.coef_) if abs(coef) > 1e-4]
+print("🧬 Selected genes via ElasticNet:", selected_genes)
+```
+
+### ✅ Step-by-Step Code to Select Overlapping Important Features
+
+```{python}
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+
+# 1. Train Random Forest and get importances
+rf = RandomForestClassifier(n_estimators=100, random_state=42)
+rf.fit(X, y)
+rf_importances = pd.Series(rf.feature_importances_, index=X.columns)
+
+# 2. Compute correlation with target
+correlations = df[X.columns.tolist() + ['event']].corr()['event'].drop('event').abs()
+
+# 3. Set thresholds (adjust as needed)
+rf_thresh = 0.025
+corr_thresh = 0.05
+
+# 4. Filter features above both thresholds
+important_rf = rf_importances[rf_importances > rf_thresh].index
+important_corr = correlations[correlations > corr_thresh].index
+
+# 5. Take intersection
+selected_features = list(set(important_rf).intersection(set(important_corr)))
+
+# 6. Subset your data
+X_selected = X[selected_features]
+
+print(f"Selected {len(selected_features)} features:")
+print(selected_features)
+```
+
+``` python
+Selected 13 features:
+['CLDN3', 'H19', 'SVIP', 'TRPM2', 'MELK', 'tumor_status', 'PYCR1', 'HMGB3', 'FAM241B', 'NRIP3', 'age_at_dx', 'HSD17B14', 'TMEM80']
+```
+
+And i think they are so much different,and i prefer pick the important features of random forest
+
+### ✅ Finalize Feature Selection from Random Forest
+
+You can set a threshold (e.g., importance \> 0.025) or just pick the top N features. Based on your earlier output, here's how to do it programmatically:
+
+```{python}
+# Set threshold for importance
+rf_thresh = 0.03
+
+# Filter features above threshold
+selected_rf_features = rf_importances[rf_importances > rf_thresh].sort_values(ascending=False).index.tolist()
+
+# Subset your data
+X_rf_selected = X[selected_rf_features]
+
+print(f"Selected {len(selected_rf_features)} features from Random Forest:")
+print(selected_rf_features)
+```
+
+### 🧪 Step-by-Step: Discriminant Analysis with Visualization
+
+#### 1. **Prepare Your Data**
+
+```{python}
+X_selected = df[['CLDN3', 'H19', 'SVIP', 'TRPM2', 'MELK', 'tumor_status',
+                 'PYCR1', 'HMGB3', 'FAM241B', 'NRIP3', 'age_at_dx',
+                 'HSD17B14', 'TMEM80']]
+y = df['event']
+```
+
+#### 2. **Train LDA Model**
+
+```{python}
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+
+lda = LinearDiscriminantAnalysis()
+X_lda = lda.fit_transform(X_selected, y)
+```
+
+#### 3. **Visualize Fisher Projection (2D Scatter)**
+
+```{python}
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(8, 6))
+colors = ['blue', 'red']
+for label in [0, 1]:
+    plt.scatter(X_lda[y == label, 0], X_lda[y == label, 1] if X_lda.shape[1] > 1 else [0]*sum(y==label),
+                label=f'Event {label}', alpha=0.7, color=colors[label])
+plt.title("LDA Projection (Fisher Criterion)")
+plt.xlabel("LD1")
+if X_lda.shape[1] > 1:
+    plt.ylabel("LD2")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+```
+
+![](plot-31.png)
+
+#### 4. **Visualize 1D Histogram of LD1**
+
+```{python}
+plt.figure(figsize=(8, 4))
+plt.hist(X_lda[y == 0, 0], bins=30, alpha=0.6, label='Alive', color='blue')
+plt.hist(X_lda[y == 1, 0], bins=30, alpha=0.6, label='Dead', color='red')
+plt.title("LDA Component 1 Distribution")
+plt.xlabel("LD1")
+plt.ylabel("Frequency")
+plt.legend()
+plt.tight_layout()
+plt.show()
+```
+
+![](plot-32.png)
+
+#### 5. **Bayesian Classification Report**
+
+```{python}
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+
+X_train, X_test, y_train, y_test = train_test_split(X_selected, y, test_size=0.2, random_state=42)
+lda.fit(X_train, y_train)
+y_pred = lda.predict(X_test)
+
+print(classification_report(y_test, y_pred))
+```
+
+``` python
+... print(classification_report(y_test, y_pred))
+              precision    recall  f1-score   support
+
+           0       0.88      0.96      0.92        52
+           1       0.67      0.36      0.47        11
+
+    accuracy                           0.86        63
+   macro avg       0.77      0.66      0.69        63
+weighted avg       0.84      0.86      0.84        63
+```
+
+---
+
+
+### 🧪 Step-by-Step: Cross-Validation with Multiple Models
+
+#### 1. **Prepare Your Data**
+
+
+```  {python}          
+X_selected = df[['tumor_status', 'H19', 'pack_years_smoked', 'age_at_dx', 'C4orf48', 'CLDN3', 'SLC39A4', 'C5', 'ATP23', 'PRAG1', 'TMEM80', 'MELK', 'SVIP', 'C9orf72', 'TESK1', 'HSD17B14']]
+y = df['event']
+```
+
+#### 2. **Import Models and Tools**
+
+
+```  {python}            
+from sklearn.model_selection import cross_val_score, StratifiedKFold
+from sklearn.metrics import make_scorer, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+import xgboost as xgb
+import lightgbm as lgb
+```
+
+#### 3. **Define Models**
+
+
+
+```  {python}       
+models = {
+    "XGBoost": xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss'),
+    "LightGBM": lgb.LGBMClassifier()
+
+}
+```
+
+#### 4. **Cross-Validation Setup**
+
+
+```  {python}          
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+scorers = {
+    'Accuracy': make_scorer(accuracy_score),
+    'Precision': make_scorer(precision_score),
+    'Recall': make_scorer(recall_score),
+    'F1': make_scorer(f1_score)
+}
+```
+
+#### 5. **Run Cross-Validation**
+
+
+```  {python}           
+for name, model in models.items():
+    print(f"\n{name}")
+    for score_name, scorer in scorers.items():
+        scores = cross_val_score(model, X_selected, y, cv=cv, scoring=scorer)
+        print(f"{score_name}: {scores.mean():.3f} ± {scores.std():.3f}")
+```
+
+this is shit actaully

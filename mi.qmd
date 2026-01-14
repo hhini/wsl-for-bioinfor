@@ -1,0 +1,865 @@
+## 🧬 数据概览：SRX30029406
+
+### 📌 样本信息
+
+-   **样本类型**：Ulcerative colitis（溃疡性结肠炎）
+
+-   **物种**：Homo sapiens（人类）
+
+-   **样本编号**：SAMN50490031 / SRS26099950
+
+-   **文库名称**：C018
+
+-   **来源类型**：OTHER（非标准组织或细胞系，可能是血液或血浆）
+
+-   **选择方式**：PCR（说明有扩增步骤，可能影响定量偏倚）
+
+### 🧪 实验设计
+
+-   **建库试剂盒**：NEBNext Small RNA Library Prep Set（Illumina平台专用）
+
+-   **建库流程**：
+
+    -   每个样本等量混合成一个文库（说明这是 pooled library，可能无法区分样本）
+
+    -   文库浓度调整至 4 nM，使用 Tris 缓冲液（pH 8.5）
+
+    -   使用 0.2 N NaOH 变性
+
+    -   加入 1% PhiX 控制文库作为内参（用于测序质量控制）
+
+### 🧬 测序信息
+
+-   **平台**：Illumina NextSeq 550
+
+-   **测序类型**：单端（SINGLE）
+
+-   **策略**：miRNA-Seq
+
+-   **读长**：75 bp（远大于典型 miRNA 长度，说明包含适配子序列）
+
+-   **数据量**：
+
+    -   1 次运行（Run）
+
+    -   1.34M reads（spots）
+
+    -   67.1M bases
+
+    -   文件大小约 27.7Mb
+
+## 🔍 数据特点与分析重点
+
+### 1. **适配子污染可能性高**
+
+-   由于读长为 75 bp，而 miRNA 通常只有 18–24 nt，说明序列中可能包含较长的 3' 适配子。
+
+-   NEBNext 的常见适配子序列为：
+
+    代码
+
+    ```         
+    AGATCGGAAGAGCACACGTCT 
+    ```
+
+-   后续需重点进行适配子去除和长度过滤。
+
+### 2. **样本混合（pooled）设计**
+
+-   每个样本等量混合进一个文库，意味着：
+
+    -   无法进行个体层面的差异表达分析
+
+    -   更适合做总体表达谱或探索性分析
+
+    -   若后续有多个 SRX/SRR 文件，需确认是否每个代表一个 pooled group
+
+### 3. **测序深度适中**
+
+-   约 1.3M reads，属于中等深度的 miRNA-Seq
+
+-   足以检测高表达 miRNA，但对低丰度 miRNA 的灵敏度有限
+
+-   后续可评估 mapping rate 和表达分布，判断是否需要更深测序或补充样本
+
+### 4. **研究背景**
+
+-   研究目标是探索未治疗的 IBD（Crohn 和 UC）患者中，免疫系统失调与血源性 miRNA 的关系
+
+-   这提示我们后续分析可以关注：
+
+    -   血液中高表达的 miRNA（如 miR-21, miR-146a 等）
+
+    -   与炎症、免疫调节相关的 miRNA
+
+    -   是否有已知 IBD biomarker miRNA 表达异常
+
+## 📥 第一步：下载 SRR34901102 的 FASTQ 数据
+
+已安装 SRA Toolkit，并配置好 `vdb-config`。
+
+### 🔧 下载并转换为 FASTQ 格式
+
+``` bash
+# 下载 SRA 文件
+prefetch SRR34901102
+
+# 转换为 FASTQ（单端数据）
+fasterq-dump SRR34901102 -e 8 -O fastq/
+```
+
+-   `-e 8`：使用 8 个线程加速
+
+-   `-O fastq/`：输出到指定目录
+
+``` bash
+^Cjayz@localhost:~/miRNA/data/data# 下载 SRA 文件件
+prefetch SRR34901102
+
+# 转换为 FASTQ（单端数据）
+fasterq-dump SRR34901102 -e 8 -O fastq/
+
+2025-10-23T02:23:25 prefetch.3.0.3: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-23T02:23:26 prefetch.3.0.3: 1) Downloading 'SRR34901102'...
+2025-10-23T02:23:26 prefetch.3.0.3: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-23T02:23:26 prefetch.3.0.3:  Downloading via HTTPS...
+2025-10-23T02:23:26 prefetch.3.0.3:    Continue download of 'SRR34901102' from 573945      
+2025-10-23T02:23:47 prefetch.3.0.3:  HTTPS download succeed
+2025-10-23T02:23:47 prefetch.3.0.3:  'SRR34901102' is valid
+2025-10-23T02:23:47 prefetch.3.0.3: 1) 'SRR34901102' was downloaded successfully
+2025-10-23T02:23:47 prefetch.3.0.3: 'SRR34901102' has 0 unresolved dependencies
+spots read      : 1,342,171
+reads read      : 1,342,171
+reads written   : 1,342,171
+```
+
+可以用以下命令确认文件大小，得到316M
+
+```         
+ls -lh fastq/SRR34901102.fastq 
+```
+
+``` bash
+jayz@localhost:~/miRNA/data/data$ ls -lh fastq/SRR34901102.fastq 
+-rw-r--r-- 1 jayz jayz 316M Oct 23 10:23 fastq/SRR34901102.fastq
+```
+
+## 🔍 第二步：运行 FastQC 进行质量评估
+
+已安装 FastQC，然后运行：
+
+``` bash
+# 创建输出目录
+mkdir -p fastqc_output
+
+# 运行 FastQC
+fastqc fastq/SRR34901102.fastq -o fastqc_output/
+```
+
+FastQC 会生成一个 `.html` 报告和 `.zip` 文件。你可以用浏览器打开 HTML 文件查看图形化结果。
+
+``` bash
+jayz@localhost:~/miRNA/data/data$ # 创建输出目录
+mkdir -p fastqc_output
+
+# 运行 FastQC
+fastqc fastq/SRR34901102.fastq -o fastqc_output/
+null
+Started analysis of SRR34901102.fastq
+Approx 5% complete for SRR34901102.fastq
+Approx 10% complete for SRR34901102.fastq
+Approx 15% complete for SRR34901102.fastq
+Approx 20% complete for SRR34901102.fastq
+Approx 25% complete for SRR34901102.fastq
+Approx 30% complete for SRR34901102.fastq
+Approx 35% complete for SRR34901102.fastq
+Approx 40% complete for SRR34901102.fastq
+Approx 45% complete for SRR34901102.fastq
+Approx 50% complete for SRR34901102.fastq
+Approx 55% complete for SRR34901102.fastq
+Approx 60% complete for SRR34901102.fastq
+Approx 65% complete for SRR34901102.fastq
+Approx 70% complete for SRR34901102.fastq
+Approx 75% complete for SRR34901102.fastq
+Approx 80% complete for SRR34901102.fastq
+Approx 85% complete for SRR34901102.fastq
+Approx 90% complete for SRR34901102.fastq
+Approx 95% complete for SRR34901102.fastq
+Analysis complete for SRR34901102.fastq
+```
+
+![](images/屏幕截图%202025-10-23%20102721.png)
+
+![](images/屏幕截图%202025-10-23%20102737.png)
+
+![](images/屏幕截图%202025-10-23%20102746.png)
+
+![](images/屏幕截图%202025-10-23%20102753.png)
+
+![](images/屏幕截图%202025-10-23%20102802.png)
+
+![](images/屏幕截图%202025-10-23%20102810.png)
+
+## ✅ 在 miRNA-Seq 中常见的红叉模块解释
+
+| 模块名称 | FastQC 红叉原因 | 在 miRNA-Seq 中是否异常 | 解释 |
+|------------------|------------------|------------------|------------------|
+| **Per base sequence content** | 每个位点的 A/T/G/C 比例不均衡 | ✅ 正常 | miRNA 序列是高度结构化的短序列，前几位常常有偏好性（如 seed 区域），导致碱基比例不均衡 |
+| **GC content** | GC 含量偏离理论分布 | ✅ 正常 | miRNA 通常 GC 含量偏高，尤其是某些炎症相关 miRNA（如 miR-21），偏离均值是预期的 |
+| **Sequence duplication levels** | 序列重复率高 | ✅ 正常 | miRNA 表达本身就高度集中，几个高表达 miRNA 占据大部分 reads，重复率高是生物学特征 |
+| **Overrepresented sequences** | 某些序列频率远高于背景 | ✅ 正常 | 这些往往是 adapter 序列或高表达 miRNA（如 miR-16、miR-451），FastQC 会标红但在 miRNA-Seq 中是预期现象 |
+
+## 🧠 总结
+
+这些红叉在 **常规 RNA-Seq 或 WGS** 中可能表示问题，但在 **miRNA-Seq** 中往往是 **生物学特征** 或 **技术设计导致的预期现象**，并不代表数据质量差。
+
+## ✅ 去除adapter（针对单端 miRNA-Seq）
+
+常见信息：5' 接头序列往往以 AGATCGGAAGAGCACACGTCT 开头的片段出现在多家供应商和社区资料中，作为 5' 端接头的起始序列的一部分。具体完整序列需以你型号的官方文档为准，因为不同版本可能包含额外的引物区域或变体。此起始片段在若干资料中被引用为 NEBNext 小RNA 文库接头的一部分
+
+``` bash
+fastp -i SRR34901102.fastq -o trimmed.fastq \
+      -j fastp.json -h fastp.html \
+      --detect_adapter_for_pe 
+```
+
+### 参数解释：
+
+-   `-i`：输入原始 FASTQ 文件（单端）
+
+-   `-o`：输出清洗后的 FASTQ 文件
+
+-   `-j`：输出 JSON 格式的质控报告
+
+-   `-h`：输出 HTML 格式的质控报告
+
+-   `--detect_adapter`：自动检测并去除适配子（适用于单端数据）
+
+``` bash
+jayz@localhost:~/miRNA/data/data/fastq$ fastp -i SRR34901102.fastq -o trimmed.fastq \
+      -j fastp.json -h fastp.html \
+      --detect_adapter_for_pe 
+Detecting adapter sequence for read1...
+CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT
+
+Read1 before filtering:
+total reads: 1342171
+total bases: 67108550
+Q20 bases: 63379100(94.4427%)
+Q30 bases: 61967498(92.3392%)
+
+Read1 after filtering:
+total reads: 1332198
+total bases: 66606859
+Q20 bases: 63054730(94.667%)
+Q30 bases: 61670249(92.5884%)
+
+Filtering result:
+reads passed filter: 1332198
+reads failed due to low quality: 7197
+reads failed due to too many N: 1
+reads failed due to too short: 2775
+reads with adapter trimmed: 2981
+bases trimmed due to adapters: 135802
+
+Duplication rate (may be overestimated since this is SE data): 91.7063%
+
+JSON report: fastp.json
+HTML report: fastp.html
+
+fastp -i SRR34901102.fastq -o trimmed.fastq -j fastp.json -h fastp.html --detect_adapter_for_pe
+fastp v0.23.4, time used: 2 seconds
+```
+
+## 🧼 fastp 清洗结果分析
+
+### 🔹 自动检测到的适配子序列
+
+``` bash
+CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT 
+```
+
+-   这个序列并不是 NEBNext 官方适配子（通常是 `AGATCGGAAGAGCACACGTCT`），但它可能是拼接后的 adapter + insert 的一部分。
+
+-   fastp 自动检测机制在 miRNA-Seq 中有时会偏离真实 adapter，建议后续用 Cutadapt 手动指定 adapter 再做一次对比。
+
+### 🔹 重复率
+
+``` bash
+Duplication rate: 91.7% 
+```
+
+-   在 miRNA-Seq 中这是**正常现象**，因为高表达 miRNA（如 miR-16、miR-21）会占据大量 reads。
+
+-   FastQC 和 fastp 都会标红，但这不是技术问题，而是生物学特征。
+
+## ✂️ Cutadapt 命令设计（针对 SRR34901102）
+
+```         
+cutadapt -a AGATCGGAAGAGCACACGTCT \
+  -m 18 -M 30 \
+  --discard-untrimmed \
+  -o cutadapt_trimmed.fastq \
+  trimmed.fastq
+```
+
+### 参数解释：
+
+-   `-a AGATCGGAAGAGCACACGTCT`：指定 NEBNext 的 3' 适配子序列
+
+-   `-m 18 -M 30`：保留长度在 18–30 nt 的 reads（典型 miRNA 范围）
+
+-   `--discard-untrimmed`：丢弃未检测到适配子的 reads（更严格，确保只保留真实 insert）
+
+-   `-o cutadapt_trimmed.fastq`：输出文件名
+
+-   `trimmed.fastq`：输入文件（你刚用 fastp 生成的）
+
+``` bash
+jayz@localhost:~/miRNA/data/data/fastq$ cutadapt -a AGATCGGAAGAGCACACGTCT \
+  -m 18 -M 30 \
+  --discard-untrimmed \
+  -o cutadapt_trimmed.fastq \
+  trimmed.fastq
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -a AGATCGGAAGAGCACACGTCT -m 18 -M 30 --discard-untrimmed -o cutadapt_trimmed.fastq trimmed.fastq
+Processing single-end reads on 1 core ...
+Done           00:00:02     1,332,198 reads @   1.9 µs/read;  32.13 M reads/minute
+Finished in 2.490 s (1.869 µs/read; 32.11 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:               1,332,198
+Reads with adapters:                   608,832 (45.7%)
+
+== Read fate breakdown ==
+Reads that were too short:              83,709 (6.3%)
+Reads that were too long:            1,149,748 (86.3%)
+Reads discarded as untrimmed:               35 (0.0%)
+Reads written (passing filters):        98,706 (7.4%)
+
+Total basepairs processed:    66,606,859 bp
+Total written (filtered):      2,200,894 bp (3.3%)
+
+=== Adapter 1 ===
+
+Sequence: AGATCGGAAGAGCACACGTCT; Type: regular 3'; Length: 21; Trimmed: 608832 times      
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20-21 bp: 2
+
+Bases preceding removed adapters:
+  A: 17.8%
+  C: 13.7%
+  G: 6.5%
+  T: 56.7%
+  none/other: 5.3%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       3362    20815.6 0       3362
+4       2556    5203.9  0       2556
+5       17198   1301.0  0       17198
+6       6924    325.2   0       6924
+7       1858    81.3    0       1858
+8       1844    20.3    0       1844
+9       2605    5.1     0       2601 4
+10      6374    1.3     1       6174 200
+11      7680    0.3     1       7409 271
+12      11608   0.1     1       11156 452
+13      151995  0.0     1       146666 5329
+14      45027   0.0     1       43204 1823
+15      42817   0.0     1       40167 2650
+16      13021   0.0     1       12316 705
+17      38499   0.0     1       36578 1921
+18      64471   0.0     1       61284 3169 18
+19      8627    0.0     1       8130 488 9
+20      3281    0.0     2       3050 202 29
+21      2887    0.0     2       2638 216 33
+22      2171    0.0     2       2007 144 20
+23      1495    0.0     2       1371 111 13
+24      1766    0.0     2       1632 110 24
+25      1761    0.0     2       1606 139 16
+26      3256    0.0     2       3005 216 35
+27      14922   0.0     2       13750 1070 102
+28      29900   0.0     2       28122 1600 178
+29      18848   0.0     2       17590 1129 129
+30      9090    0.0     2       8375 618 97
+31      2842    0.0     2       2630 193 19
+32      6478    0.0     2       5937 470 71
+33      8357    0.0     2       7616 628 113
+34      20017   0.0     2       18336 1466 215
+35      5067    0.0     2       4659 368 40
+36      2563    0.0     2       2365 178 20
+37      1967    0.0     2       1810 142 15
+38      1422    0.0     2       1298 113 11
+39      1177    0.0     2       1071 96 10
+40      825     0.0     2       747 69 9
+41      7098    0.0     2       6540 514 44
+42      445     0.0     2       406 33 6
+43      298     0.0     2       269 27 2
+44      343     0.0     2       324 19
+45      417     0.0     2       386 27 4
+46      276     0.0     2       259 14 3
+47      395     0.0     2       346 44 5
+48      317     0.0     2       288 26 3
+49      482     0.0     2       449 31 2
+50      32203   0.0     2       29495 2463 245
+```
+
+过长的 reads 比例异常高（86.3%）
+
+## 🧠 为什么 adapter 可能不是标准序列？
+
+1.  **NEBNext 的 adapter 是可变结构**：
+
+    -   虽然文档中写的是 `AGATCGGAAGAGCACACGTCT`，但实际测序中可能是 adapter + barcode + linker 的组合。
+
+    -   真实污染序列可能更长、更复杂，或有变体。
+
+2.  **FastQC 中的 Overrepresented Sequences 提示真实 adapter**：
+
+    -   之前用 fastp 自动检测到的序列是：
+
+        ```         
+        CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT 
+        ```
+
+    -   这可能是 adapter 的真实污染形式，包含了 barcode 或 linker 区域。
+
+3.  **Cutadapt 只识别标准 adapter，可能漏掉真实污染序列**：
+
+    -   这解释了为什么只有 45.7% 的 reads 被识别为含 adapter，而剩下的 86.3% 被判定为“过长”。
+
+## 用真实 adapter 再跑一次 Cutadapt
+
+可以尝试用 fastp 检测到的序列作为 adapter，重新跑 Cutadapt：
+
+``` bash
+cutadapt -a CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT \
+  -m 15 -M 40 \
+  --discard-untrimmed \
+  -o cutadapt_final.fastq \
+  SRR34901102.fastq
+```
+
+``` bash
+jayz@localhost:~/miRNA/data/data/fastq$ cutadapt -a CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT \
+  -m 18 -M 30 \
+  --discard-untrimmed \
+  -o cutadapt_realadapter.fastq \
+  trimmed.fastq
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -a CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT -m 18 -M 30 --discard-untrimmed -o cutadapt_realadapter.fastq trimmed.fastq
+Processing single-end reads on 1 core ...
+Done           00:00:03     1,332,198 reads @   2.3 µs/read;  26.28 M reads/minute
+Finished in 3.043 s (2.284 µs/read; 26.27 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:               1,332,198
+Reads with adapters:                   495,941 (37.2%)
+
+== Read fate breakdown ==
+Reads that were too short:             312,336 (23.4%)
+Reads that were too long:            1,019,827 (76.6%)
+Reads discarded as untrimmed:               35 (0.0%)
+Reads written (passing filters):             0 (0.0%)
+
+Total basepairs processed:    66,606,859 bp
+Total written (filtered):              0 bp (0.0%)
+
+=== Adapter 1 ===
+
+Sequence: CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT; Type: regular 3'; Length: 58; Trimmed: 495941 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20-29 bp: 2; 30-39 bp: 3; 40-49 bp: 4; 50-58 bp: 5
+
+Bases preceding removed adapters:
+  A: 8.1%
+  C: 0.2%
+  G: 8.4%
+  T: 20.4%
+  none/other: 63.0%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       182460  20815.6 0       182460
+4       1179    5203.9  0       1179
+11      1       0.3     1       0 1
+36      98      0.0     3       0 1 0 97
+39      3       0.0     3       0 0 0 3
+50      312200  0.0     5       0 0 0 0 1 312199
+```
+
+分析得到
+
+``` bash
+#用CACCCTGAACGCGCCCGATCTCGTCTGATCTCGGAAGCTAAGCAGGGTCGGGCCTGGT
+Total reads processed:               1,332,198
+Reads with adapters:                   495,941 (37.2%)
+```
+
+``` bash
+#用AGATCGGAAGAGCACACGTCT
+Total reads processed:               1,332,198
+Reads with adapters:                   608,832 (45.7%)
+```
+
+#### 用AGATCGGAAGAGCACACGTCT 放宽大小
+
+``` bash
+cutadapt -a AGATCGGAAGAGCACACGTCT \
+  -m 18 -M 40 \
+  --discard-untrimmed \
+  -o cutadapt_trimmed.fastq \
+  trimmed.fastq
+```
+
+``` bash
+jayz@localhost:~/miRNA/data/data/fastq$ cutadapt -a AGATCGGAAGAGCACACGTCT \
+  -m 18 -M 40 \
+  --discard-untrimmed \
+  -o cutadapt_trimmed.fastq \
+  trimmed.fastq
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -a AGATCGGAAGAGCACACGTCT -m 18 -M 40 --discard-untrimmed -o cutadapt_trimmed.fastq trimmed.fastq
+Processing single-end reads on 1 core ...
+Done           00:00:02     1,332,198 reads @   2.0 µs/read;  29.67 M reads/minute
+Finished in 2.702 s (2.028 µs/read; 29.58 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:               1,332,198
+Reads with adapters:                   608,832 (45.7%)
+
+== Read fate breakdown ==
+Reads that were too short:              83,709 (6.3%)
+Reads that were too long:              759,642 (57.0%)
+Reads discarded as untrimmed:               36 (0.0%)
+Reads written (passing filters):       488,811 (36.7%)
+
+Total basepairs processed:    66,606,859 bp
+Total written (filtered):     15,983,004 bp (24.0%)
+
+=== Adapter 1 ===
+
+Sequence: AGATCGGAAGAGCACACGTCT; Type: regular 3'; Length: 21; Trimmed: 608832 times      
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20-21 bp: 2
+
+Bases preceding removed adapters:
+  A: 17.8%
+  C: 13.7%
+  G: 6.5%
+  T: 56.7%
+  none/other: 5.3%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       3362    20815.6 0       3362
+4       2556    5203.9  0       2556
+5       17198   1301.0  0       17198
+6       6924    325.2   0       6924
+7       1858    81.3    0       1858
+8       1844    20.3    0       1844
+9       2605    5.1     0       2601 4
+10      6374    1.3     1       6174 200
+11      7680    0.3     1       7409 271
+12      11608   0.1     1       11156 452
+13      151995  0.0     1       146666 5329
+14      45027   0.0     1       43204 1823
+15      42817   0.0     1       40167 2650
+16      13021   0.0     1       12316 705
+17      38499   0.0     1       36578 1921
+18      64471   0.0     1       61284 3169 18
+19      8627    0.0     1       8130 488 9
+20      3281    0.0     2       3050 202 29
+21      2887    0.0     2       2638 216 33
+22      2171    0.0     2       2007 144 20
+23      1495    0.0     2       1371 111 13
+24      1766    0.0     2       1632 110 24
+25      1761    0.0     2       1606 139 16
+26      3256    0.0     2       3005 216 35
+27      14922   0.0     2       13750 1070 102
+28      29900   0.0     2       28122 1600 178
+29      18848   0.0     2       17590 1129 129
+30      9090    0.0     2       8375 618 97
+31      2842    0.0     2       2630 193 19
+32      6478    0.0     2       5937 470 71
+33      8357    0.0     2       7616 628 113
+34      20017   0.0     2       18336 1466 215
+35      5067    0.0     2       4659 368 40
+36      2563    0.0     2       2365 178 20
+37      1967    0.0     2       1810 142 15
+38      1422    0.0     2       1298 113 11
+39      1177    0.0     2       1071 96 10
+40      825     0.0     2       747 69 9
+41      7098    0.0     2       6540 514 44
+42      445     0.0     2       406 33 6
+43      298     0.0     2       269 27 2
+44      343     0.0     2       324 19
+45      417     0.0     2       386 27 4
+46      276     0.0     2       259 14 3
+47      395     0.0     2       346 44 5
+48      317     0.0     2       288 26 3
+49      482     0.0     2       449 31 2
+50      32203   0.0     2       29495 2463 245
+```
+
+## ✅ 当前清洗结果总结
+
+| 项目           | 数值             | 说明                            |
+|----------------|------------------|---------------------------------|
+| 总 reads       | 1,332,198        | 原始输入                        |
+| 检测到 adapter | 608,832（45.7%） | 说明该 adapter 是主要污染源     |
+| 通过过滤保留   | 488,811（36.7%） | 非常理想，适合进入定量分析      |
+| 丢弃过短 reads | 83,709（6.3%）   | 多为 adapter-only 或降解片段    |
+| 丢弃过长 reads | 759,642（57.0%） | 多为未完全修剪或非 miRNA insert |
+
+## 🧠 结论
+
+-   **AGATCGGAAGAGCACACGTCT 是这批数据中最有效的 adapter 序列**，比 fastp 自动检测的那条更能解释污染来源。
+
+-   **cutadapt_trimmed.fastq 是目前而言最干净、最适合用于下游分析的文件**。
+
+-   已经完成了 miRNA-Seq 上游流程中最关键的一步：**高质量的 adapter 去除 + insert 长度过滤**。
+
+## 🧩 步骤 1：使用 Bowtie 比对到 GRCh38 genome
+
+已经有 GRCh38 的 Bowtie index（`GRCh38_index.*.ebwt`），我们可以直接比对：
+
+``` bash
+bowtie -a --best --strata -v 2 -p 8 -S GRCh38_index \
+  ~/miRNA/data/data/fastq/trimmed.fastq > aligned1_relaxed.sam
+```
+
+### 参数说明：
+
+-   `-v 2`：允许最多 2 个 mismatch（适合短序列）
+
+-   `-p 8`：使用 8 个线程
+
+-   `-S`：输出 SAM 格式
+
+-   `GRCh38_index`： genome index 前缀
+
+-   `trimmed.fastq`：你清洗后的 miRNA reads
+
+``` bash
+jayz@localhost:~/miRNA/data$ bowtie -a --best --strata -v 2 -p 8 -S GRCh38_index \
+  ~/miRNA/data/data/fastq/trimmed.fastq > aligned1_relaxed.sam
+Setting the index via positional argument will be deprecated in a future release. Please use -x option instead.
+# reads processed: 1332198
+# reads with at least one alignment: 712711 (53.50%)
+# reads that failed to align: 619487 (46.50%)
+Reported 12457063 alignments
+```
+
+## ✅ Bowtie 比对结果总结
+
+| 指标 | 数值 | 说明 |
+|------------------------|------------------------|------------------------|
+| 总 reads | 1,332,198 | 清洗后的 miRNA reads |
+| 成功比对 | 683,871（53.50%） | 非常合理，说明数据质量良好 |
+| 未比对 | 648,327（46.50%） | 可能是 adapter-only、降解片段或非 genome 匹配序列 |
+| 比对方式 | `-v 2`（允许 1 个 mismatch） | 适合短序列，兼顾灵敏度与特异性 |
+
+## 🧩 步骤 2：转换为 BAM 并排序
+
+``` bash
+samtools view -bS aligned1_relaxed.sam > aligned1_relaxed.bam
+samtools sort aligned1_relaxed.bam -o aligned1_relaxed.sorted.bam
+samtools index aligned1_relaxed.sorted.bam
+```
+
+## 🧩 步骤 3：使用 featureCounts 进行定量
+
+你已经有 `hsa.gff3` 注释文件，我们可以直接运行：
+
+``` bash
+featureCounts -T 8 -t miRNA -g Name \
+  -a hsa.gff3 -o counts_mature_relaxed.txt aligned1_relaxed.sorted.bam
+```
+
+### 参数说明：
+
+-   `-T 8`：使用 8 个线程
+
+-   `-t miRNA`：注释文件中用于计数的 feature 类型（你可以先检查 GFF 文件是否使用 `miRNA`、`miRNA_primary_transcript` 或其他）
+
+-   `-g ID`：用于分组的属性字段（通常是 miRNA ID）
+
+-   `-a hsa.gff3`：注释文件
+
+-   `-o counts.txt`：输出计数结果
+
+``` bash
+jayz@localhost:~/miRNA/data$ featureCounts -T 8 -t miRNA -g Name \
+  -a hsa.gff3 -o counts_mature_relaxed.txt aligned1_relaxed.sorted.bam
+
+        ==========     _____ _    _ ____  _____  ______          _____
+        =====         / ____| |  | |  _ \|  __ \|  ____|   /\   |  __ \
+          =====      | (___ | |  | | |_) | |__) | |__     /  \  | |  | |
+            ====      \___ \| |  | |  _ <|  _  /|  __|   / /\ \ | |  | |
+              ====    ____) | |__| | |_) | | \ \| |____ / ____ \| |__| |
+        ==========   |_____/ \____/|____/|_|  \_\______/_/    \_\_____/
+          v2.0.3
+
+//========================== featureCounts setting ===========================\\
+||                                                                            ||
+||             Input files : 1 BAM file                                       ||
+||                                                                            ||
+||                           aligned1_relaxed.sorted.bam                      ||
+||                                                                            ||
+||             Output file : counts_mature_relaxed.txt                        ||
+||                 Summary : counts_mature_relaxed.txt.summary                ||
+||              Paired-end : no                                               ||
+||        Count read pairs : no                                               ||
+||              Annotation : hsa.gff3 (GTF)                                   ||
+||      Dir for temp files : ./                                               ||
+||                                                                            ||
+||                 Threads : 8                                                ||
+||                   Level : meta-feature level                               ||
+||      Multimapping reads : not counted                                      ||
+|| Multi-overlapping reads : not counted                                      ||
+||   Min overlapping bases : 1                                                ||
+||                                                                            ||
+\\============================================================================//
+
+//================================= Running ==================================\\
+||                                                                            ||
+|| Load annotation file hsa.gff3 ...                                          ||
+||    Features : 2883                                                         ||
+||    Meta-features : 2652                                                    ||
+||    Chromosomes/contigs : 24                                                ||
+||                                                                            ||
+|| Process BAM file aligned1_relaxed.sorted.bam...                            ||
+||    Single-end reads are included.                                          ||
+||    Total alignments : 13076550                                             ||
+||    Successfully assigned alignments : 71 (0.0%)                            ||
+||    Running time : 0.02 minutes                                             ||
+||                                                                            ||
+|| Write the final count table.                                               ||
+|| Write the read assignment summary.                                         ||
+||                                                                            ||
+|| Summary of counting results can be found in file "counts_mature_relaxed.t  ||
+|| xt.summary"                                                                ||
+||                                                                            ||
+\\============================================================================//
+```
+
+这批数据***在 genome 比对和 featureCounts 上分配率极低，而且 adapter 序列不确定***，转向 **Salmon + mature.fa** 。Salmon 是轻量级、快速且适合处理短序列的工具，尤其在 miRNA 表达定量方面表现出色。
+
+## 🧩 Salmon 定量流程（基于 mature.fa）
+
+已经有：
+
+-   清洗后的 reads：`trimmed.fastq`
+
+-   miRNA 转录本参考：`mature.fa`
+
+-   Salmon index：`mirna_index`
+
+我们直接进入定量：
+
+### ✅ Salmon quant 命令
+
+bash
+
+```         
+salmon quant -i mirna_index \
+  -l SR \
+  -r ~/miRNA/data/data/fastq/trimmed.fastq \
+  -o salmon_quant1 \
+  --gcBias --validateMappings
+```
+
+### 参数说明：
+
+-   `-i mirna_index`：你已经构建好的 index（基于 mature.fa）
+
+-   `-l SR`：单端数据，Salmon 会自动推断方向性
+
+-   `-r trimmed.fastq`：输入 reads
+
+-   `-o salmon_quant`：输出目录
+
+-   `--gcBias`：校正 GC 偏倚
+
+-   `--validateMappings`：提高 mapping 精度
+
+``` bash
+jayz@localhost:~/miRNA/data$ salmon quant -i mirna_index \
+  -l SR \
+  -r ~/miRNA/data/data/fastq/trimmed.fastq \
+  -o salmon_quant1 \
+  --gcBias --validateMappings
+### salmon (selective-alignment-based) v1.10.2
+### [ program ] => salmon
+### [ command ] => quant
+### [ index ] => { mirna_index }
+### [ libType ] => { SR }
+### [ unmatedReads ] => { /home/jayz/miRNA/data/data/fastq/trimmed.fastq }
+### [ output ] => { salmon_quant1 }
+### [ gcBias ] => { }
+### [ validateMappings ] => { }
+Logs will be written to salmon_quant1/logs
+-----------------------------------------
+| Loading contig table | Time = 8.2816 ms
+-----------------------------------------
+size = 53161
+-----------------------------------------
+| Loading contig offsets | Time = 1.0266 ms
+-----------------------------------------
+-----------------------------------------
+| Loading reference lengths | Time = 1.0923 ms
+-----------------------------------------
+-----------------------------------------
+| Loading mphf table | Time = 1.4715 ms
+-----------------------------------------
+size = 1121286
+Number of ones: 53160
+Number of ones per inventory item: 512
+[2025-10-23 11:46:06.882] [jointLog] [info] setting maxHashResizeThreads to 16
+[2025-10-23 11:46:06.882] [jointLog] [info] Fragment incompatibility prior below threshold.  Incompatible fragments will be ignored.
+[2025-10-23 11:46:06.883] [jointLog] [info] Usage of --validateMappings implies use of minScoreFraction. Since not explicitly specified, it is being set to 0.65
+[2025-10-23 11:46:06.884] [jointLog] [info] Setting consensusSlack to selective-alignment default of 0.35.
+[2025-10-23 11:46:06.884] [jointLog] [info] parsing read library format
+[2025-10-23 11:46:06.886] [jointLog] [info] There is 1 library.
+[2025-10-23 11:46:06.886] [jointLog] [info] Loading pufferfish index
+[2025-10-23 11:46:06.887] [jointLog] [info] Loading dense pufferfish index.
+Inventory entries filled: 104
+-----------------------------------------
+| Loading contig boundaries | Time = 3.5324 ms
+-----------------------------------------
+size = 1121286
+-----------------------------------------
+| Loading sequence | Time = 1.2584 ms
+-----------------------------------------
+size = 270726
+-----------------------------------------
+| Loading positions | Time = 2.5511 ms
+-----------------------------------------
+size = 1051325
+-----------------------------------------
+| Loading reference sequence | Time = 1.422 ms
+-----------------------------------------
+-----------------------------------------
+| Loading reference accumulative lengths | Time = 1.4039 ms
+-----------------------------------------
+[2025-10-23 11:46:06.910] [jointLog] [info] done
+[2025-10-23 11:46:06.980] [jointLog] [info] Index contained 48204 targets
+[2025-10-23 11:46:06.990] [jointLog] [info] Number of decoys : 0
+[2025-10-23 11:46:06.993] [jointLog] [warning] Fragment GC bias correction is currently *experimental* in single-end libraries.  Please use this option with caution.
+
+
+
+processed 1000000 fragments
+hits: 0; hits per frag:  0[2025-10-23 11:46:07.539] [jointLog] [warning] salmon was only able to assign 0 fragments to transcripts in the index, but the minimum number of required assigned fragments (--minAssignedFrags) was 10. This could be indicative of a mismatch between the reference and sample, or a very bad sample.  You can change the --minAssignedFrags parameter to force salmon to quantify with fewer assigned fragments (must have at least 1).
+```

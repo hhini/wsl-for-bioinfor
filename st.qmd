@@ -1,0 +1,191 @@
+### 🔍 Step 1: List `.gz` files in the directory
+
+```{r}
+# 1. Define the directory path
+library(fs)
+
+# Display the structure of a specific folder, e.g., "my_project"
+dir_tree("D:/01datawsl/ST/gse")
+
+# Limit the depth of recursion (e.g., to 2 levels)
+#dir_tree("E:/acode/wsl/data6/gz", recurse = 2)
+```
+
+## 🚀 Step 1: Data Acquisition and Preprocessing
+
+The absolute first step is to **load and preprocess** the data from these gzipped files into a usable structure.
+
+### 1. Load Data into a Single Object
+
+You'll need a suitable programming environment (likely **R** or **Python**) and specialized bioinformatics libraries to handle this data type, such as:
+
+-   **Seurat** (R) or **Squidpy** / **Scanpy** (Python) for general single-cell/spatial data analysis.
+
+-   The **`Read10xVisium`** function in Seurat is specifically designed to read these files (matrix, features, barcodes, and image data) and create a **Seurat object** or **SpatialExperiment object**—the foundational structure for your analysis.
+
+**Key Files to Load:**
+
+|  |  |  |
+|----|----|----|
+| **Filename Component** | **Description** | **Purpose** |
+| `*_matrix.mtx.gz` | **Gene Expression Matrix** | Contains the raw **count data** (UMIs for each gene in each spot). |
+| `*_features.tsv.gz` | **Gene IDs/Names** | Maps the feature indices in the matrix to actual gene names. |
+| `*_barcodes.tsv.gz` | **Spot Barcodes** | Maps the cell/spot indices in the matrix to unique spatial barcodes. |
+| `*_tissue_positions.csv.gz` | **Spatial Coordinates** | Provides the **x/y coordinates** of each spot on the tissue slide. |
+| `*_scalefactors_json.json.gz` | **Scale Factors** | Necessary for correctly mapping the spot coordinates onto the high-resolution tissue image. |
+| `*_tissue_hires_image.png.gz` | **Tissue Image** | The high-resolution image used for visualization and **spatial alignment**. |
+
+### 2. Quality Control (QC)
+
+After loading, the next crucial part of preprocessing is **Quality Control** to remove poor-quality spots or cells that could skew your results. Typical QC metrics for ST data include:
+
+-   **Total UMI counts per spot:** Filter out spots with extremely low counts (suggesting poor capture or empty spots).
+
+-   **Number of genes detected per spot:** Filter spots with too few detected genes.
+
+-   **Mitochondrial gene percentage:** Spots with a very high percentage of mitochondrial transcripts often indicate **dying/stressed cells** or poor-quality libraries and should usually be filtered out.
+
+## 🗺️ Subsequent Pipeline Steps
+
+Once you have a clean, combined data object, the spatial transcriptomics pipeline generally follows these steps:
+
+### Step 2: Normalization and Dimensionality Reduction
+
+-   **Normalization:** Account for differences in sequencing depth between spots (e.g., using **Log-Normalization**).
+
+-   **Feature Selection:** Identify highly variable genes (HVGs).
+
+-   **Dimensionality Reduction:** Reduce the complexity of the data while retaining the most variance, typically using **Principal Component Analysis (PCA)**.
+
+### Step 3: Clustering and Spatial Domain Identification
+
+-   **Clustering:** Group spots with similar gene expression profiles (e.g., using **k-nearest neighbors (kNN) graph** followed by an algorithm like **Louvain** or **Leiden**). These clusters often correspond to distinct **tissue types** or **cell-type domains** (e.g., tumor core, immune infiltrate, healthy stroma).
+
+-   **Visualization:** Map the resulting clusters back onto the tissue image using the spatial coordinates.
+
+### Step 4: Spatial Differential Expression and Analysis
+
+-   **Marker Gene Identification:** Identify the genes that are **differentially expressed (DE)** in each identified spatial domain/cluster. These are the genes defining the cellular identity of the region.
+
+-   **Spatial Analysis:** Apply methods to explicitly find genes whose expression is **spatially variable** or **spatially autocorrelated** (e.g., using **SpatialDE**, **Giotto**, or **SPARK**), meaning their expression patterns aren't random but vary based on their location on the tissue.
+
+### Step 5: Interpretation and Biological Context
+
+-   **Annotation:** Use the identified marker genes to manually or semi-automatically **annotate** the spatial domains (e.g., "Neuron-rich area," "Glial area," "Tumor Boundary").
+
+-   **Cell-Cell Interaction (Optional):** Infer potential communication pathways between adjacent spatial domains using ligand-receptor pair analysis.
+
+-   **Pathway Analysis:** Determine which **biological pathways** or **Gene Ontology (GO) terms** are enriched in the different spatial regions to understand their function.
+
+## 🧬 Spatial Transcriptomics Pipeline with Seurat
+
+### 🔧 Step 1: Load Required Libraries
+
+These packages are essential for spatial data analysis and visualization.
+
+r
+
+```         
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+```
+
+### 📁 Step 2: Define Your Sample Paths
+
+Your folder contains multiple samples (Tumor19, Tumor20, etc.). We'll define them and set the base directory.
+
+r
+
+```         
+# Sample identifiers
+samples <- c("GSM8703563_Tumor19", "GSM8703564_Tumor20", "GSM8703565_Tumor24", "GSM8703566_Tumor26")
+
+# Base directory where all samples are stored
+base_dir <- "D:/01datawsl/ST/gse"
+```
+
+### 📥 Step 3: Load Each Sample with `Load10X_Spatial`
+
+This function reads Visium data including the HDF5 matrix, images, and spatial coordinates.
+
+r
+
+```         
+# Create a list to store Seurat objects
+seurat_list <- list()
+
+for (sample in samples) {
+  sample_dir <- file.path(base_dir, sample)
+  
+  seurat_obj <- Load10X_Spatial(
+    data.dir = sample_dir,
+    filename = paste0(sample, "_filtered_feature_bc_matrix.h5"),
+    assay = "Spatial",
+    slice = sample
+  )
+  
+  seurat_list[[sample]] <- seurat_obj
+}
+```
+
+🧠 **Why this matters:** Each sample is loaded with its spatial context, allowing downstream analysis of tissue architecture.
+
+### 🔗 Step 4: Merge All Samples
+
+Combines all samples into one Seurat object for integrated analysis.
+
+r
+
+```         
+seurat_merged <- Reduce(function(x, y) merge(x, y), seurat_list) 
+```
+
+### 🧼 Step 5: Preprocessing
+
+We normalize the data, reduce dimensionality, and identify clusters.
+
+r
+
+```         
+seurat_merged <- SCTransform(seurat_merged, assay = "Spatial", verbose = FALSE)
+seurat_merged <- RunPCA(seurat_merged)
+seurat_merged <- FindNeighbors(seurat_merged, dims = 1:30)
+seurat_merged <- FindClusters(seurat_merged, resolution = 0.5)
+seurat_merged <- RunUMAP(seurat_merged, dims = 1:30)
+```
+
+🧠 **Why SCTransform?** It models technical noise and improves normalization across samples.
+
+### 🧭 Step 6: Visualize Clusters
+
+Use UMAP to visualize cell clusters across all samples.
+
+r
+
+```         
+DimPlot(seurat_merged, reduction = "umap", label = TRUE) + 
+  ggtitle("UMAP of Spatial Clusters")
+```
+
+### 🧬 Step 7: Spatial Visualization
+
+Overlay clusters on tissue images to see spatial distribution.
+
+r
+
+```         
+SpatialDimPlot(seurat_merged, label = TRUE, label.size = 3) 
+```
+
+### 🧠 Summary of What You’ve Done
+
+| Step                | Purpose                  |
+|---------------------|--------------------------|
+| Load libraries      | Enable spatial analysis  |
+| Define samples      | Organize input data      |
+| Load data           | Import Visium files      |
+| Merge samples       | Combine into one dataset |
+| Normalize & cluster | Prepare for analysis     |
+| Visualize           | Explore spatial patterns |

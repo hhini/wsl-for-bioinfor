@@ -1,0 +1,1305 @@
+---
+title: microbiolism
+authors:
+  - name: jayz
+    affiliation: The University of myself
+    roles: writing
+    corresponding: true
+bibliography: references.bib
+---
+
+# Microbiome upstrream analysis
+
+## #Get the data we need
+
+The dataset we're looking at from the NCBI SRA entry for ERX14412698 is **exactly the kind of raw microbiome data** you want to practice with.
+
+## ✅ Why This Is Raw Data
+
+Here’s what confirms it:
+
+-   **Instrument**: DNBSEQ-G400 — a high-throughput sequencer
+
+-   **Strategy**: WGA (Whole Genome Amplification)
+
+-   **Source**: METAGENOMIC — directly from a biological sample
+
+-   **Selection**: RANDOM — no targeted amplification
+
+-   **Layout**: PAIRED — paired-end reads
+
+-   **Run**: ERR15008105 — 6.8 million spots, 2G bases, 1.2 GB download
+
+This means you're getting **raw paired-end FASTQ files** from a **human gut biopsy**, sequenced for ***metagenomic analysis.*** Perfect for practicing:
+
+-   Quality control
+
+-   Adapter trimming
+
+-   Host read removal
+
+-   Taxonomic classification
+
+-   Functional profiling
+
+## 🛠️ How to Download in WSL
+
+You can use `fasterq-dump` or `prefetch` from the SRA Toolkit:
+
+``` bash
+# Step 1: Download the .sra file 
+prefetch ERR15008105  
+# Step 2: Convert to FASTQ 
+fasterq-dump --split-files ERR15008105 -O raw_fastq/ 
+```
+
+Or if you want direct FASTQ access, use the EBI mirror:
+
+``` bash
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR150/ERR150081/ERR15008105/ERR15008105_1.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR150/ERR150081/ERR15008105/ERR15008105_2.fastq.gz
+```
+
+## ❌ Why the FTP Download Fails
+
+The run `ERR15008105` **does not have FASTQ files available for public download** via ENA or NCBI. That’s why your `wget` attempt returned:
+
+``` bash
+No such directory ‘vol1/fastq/ERR150/ERR15008105’ 
+```
+
+This usually means:
+
+-   The submitter did **not release the raw FASTQ files**
+
+-   The data is **restricted**, or only available in `.sra` format
+
+-   The run is **archived but not yet processed** into downloadable FASTQ
+
+## Getting the raw data what we need
+
+## 🧬 What This Dataset Contains
+
+**Title**: *Diet-induced modifications to human microbiome reshape colonic homeostasis in irritable bowel syndrome(饮食引起的人体微生物群改变重塑肠易激综合征患者的结肠稳态)*
+
+**Organisms**: Human gut metagenome + Mus musculus **Platforms**:
+
+-   Illumina MiSeq (for human gut microbiome)
+
+-   Illumina NextSeq 500 (for mouse samples)
+
+**SubSeries**:
+
+-   GSE215047 → 16S rRNA microbiome data ✅
+
+-   GSE215048 → RNA-Seq I (host transcriptome)
+
+-   GSE215049 → RNA-Seq II (host transcriptome)
+
+So if you're focused on microbiome, **GSE215047** is your target — it contains raw 16S sequencing data from human gut samples.
+
+## 🧬 Selected Sample: `SRR21839487`
+
+### 🔹 Summary
+
+-   **Organism**: Human gut metagenome
+
+-   **Instrument**: Illumina MiSeq
+
+-   **Library Layout**: Paired-end
+
+-   **Treatment**: 6 weeks under low-FODMAP diet
+
+-   **Sample Type**: Human fecal sample
+
+-   **Sex**: Female
+
+-   **Run Size**: \~22.5 MB (compressed), \~35.9 million spots
+
+-   **Accession**: SRR21839487
+
+This sample is ideal for practicing:
+
+-   Quality control and trimming
+
+-   Taxonomic classification
+
+-   Diversity analysis
+
+-   Diet-related microbiome shifts
+
+## 🛠️ How to Download in WSL
+
+### Option 1: Using SRA Toolkit
+
+bash
+
+``` bash
+prefetch SRR21839487 fasterq-dump --split-files SRR21839487 -O raw_fastq/ 
+```
+
+### Option 2: Direct FASTQ from ENA
+
+``` bash
+mkdir -p raw_fastq 
+cd raw_fastq  
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR218/087/SRR21839487/SRR21839487_1.fastq.gz 
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR218/087/SRR21839487/SRR21839487_2.fastq.gz 
+```
+
+> Note: ENA splits directories by the middle digits — this one falls under `SRR218/087`
+
+``` bash
+jayz@localhost:~/microbiome/data$ mkdir -p raw_fastq
+cd raw_fastq
+
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR218/087/SRR21839487/SRR21839487_1.fastq.gz
+wget ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR218/087/SRR21839487/SRR21839487_2.fastq.gz
+--2025-09-29 14:58:36--  ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR218/087/SRR21839487/SRR21839487_1.fastq.gz
+           => ‘SRR21839487_1.fastq.gz’
+Resolving ftp.sra.ebi.ac.uk (ftp.sra.ebi.ac.uk)... 193.62.193.165
+Connecting to ftp.sra.ebi.ac.uk (ftp.sra.ebi.ac.uk)|193.62.193.165|:21... connected.
+Logging in as anonymous ... Logged in!
+==> SYST ... done.    ==> PWD ... done.
+==> TYPE I ... done.  ==> CWD (1) /vol1/fastq/SRR218/087/SRR21839487 ... done.
+==> SIZE SRR21839487_1.fastq.gz ... 10679687
+==> PASV ... done.    ==> RETR SRR21839487_1.fastq.gz ... done.
+Length: 10679687 (10M) (unauthoritative)
+
+SRR21839487_1.fastq.gz        100%[=================================================>]  10.18M  2.12MB/s    in 4.8s
+
+2025-09-29 14:58:44 (2.12 MB/s) - ‘SRR21839487_1.fastq.gz’ saved [10679687]
+
+--2025-09-29 14:58:44--  ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR218/087/SRR21839487/SRR21839487_2.fastq.gz
+           => ‘SRR21839487_2.fastq.gz’
+Resolving ftp.sra.ebi.ac.uk (ftp.sra.ebi.ac.uk)... 193.62.193.165
+Connecting to ftp.sra.ebi.ac.uk (ftp.sra.ebi.ac.uk)|193.62.193.165|:21... connected.
+Logging in as anonymous ... Logged in!
+==> SYST ... done.    ==> PWD ... done.
+==> TYPE I ... done.  ==> CWD (1) /vol1/fastq/SRR218/087/SRR21839487 ... done.
+==> SIZE SRR21839487_2.fastq.gz ... 10761248
+==> PASV ... done.    ==> RETR SRR21839487_2.fastq.gz ... done.
+Length: 10761248 (10M) (unauthoritative)
+
+SRR21839487_2.fastq.gz        100%[=================================================>]  10.26M  1.46MB/s    in 9.8s
+
+2025-09-29 14:58:58 (1.05 MB/s) - ‘SRR21839487_2.fastq.gz’ saved [10761248]
+
+jayz@localhost:~/microbiome/data/raw_fastq$ ls
+SRR21839487_1.fastq.gz  SRR21839487_2.fastq.gz
+```
+
+## 🧪 Step 1: Validate the Files
+
+Check file integrity and size:
+
+``` bash
+ls -lh SRR21839487_*.fastq.gz zcat SRR21839487_1.fastq.gz | head -n 8 
+```
+
+This confirms the files are readable and properly formatted.
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq$ ls -lh SRR21839487_*.fastq.gz
+zcat SRR21839487_1.fastq.gz | head -n 8
+-rw-r--r-- 1 jayz jayz 11M Sep 29 14:58 SRR21839487_1.fastq.gz
+-rw-r--r-- 1 jayz jayz 11M Sep 29 14:58 SRR21839487_2.fastq.gz
+@SRR21839487.1 1/1
+GTGCCAGCAGCCGCGGTAATACGTATGGTGCAAGCGTTATCCGGATTTACTTGGTTTAAAGGGAGCGCAGGCGGTGCGGCAAGTCTGAGGTGAAAGCCCGGGGCTCAACCCCGGTACTGCAGTGGAAACTGTCGTACTAGAGTGTCGGAGGGGTAAGCGGAATGCGTAGTGTAGCGGTGAAATGCGTAGATATTAGGAGGAACACCAGTGGCGAAGGCAGCTTACTGGGCGATAACTGACGCTGAGGCA
++
+1AAAA1C>1CFAGGGEFGFGGBG11AAA2ADBDAEEA/E/GGEA/EEE12F2FG1/012DFB/>?EE/E?EGGG@>E//<@EFEG2E11/BFBB1F0B/B/>BCG/FGGC/<---<.===D/=CGHFFFFF00=.::G0<CCHFH0::-9--A.9/00@A@@F//-;;;EF/FB9@@;@EFFFFF?BB@?BF//9;/9/;;-9--;A9//;A@=@@F?-:-F/FFFFF---;-:ABBFFBBBFFBFFE-
+@SRR21839487.2 2/1
+GTGCCAGCAGCCGCGGTAATACGTATGGTGCAAGCGTTATCCGGATTTACTGGGTGTAAAGGGTGCGTAGGCGGTGCGGCAAGTCTGATGTGAAAGCCCGGGGCTCAACCCTGGTACTGCATTGGAAACTGTCGTACTAGAGTGTCGGAGGGGTAAGCGGAATTCCTAGTGTAGCGGTGAAATGCGTTGATATTCGGAGGAACACCAGTGGCGAAGGCGGCTTCCTGGACGCTAACTGACGCTGAGGCCA
++
+BBBBBFFBFFFBGGGGAAAFFBG3F5B2DEHGHHHGGGGHHHGGGGGHG5FGHFG?EHHHHHG1FEG1EEGHG@EGCG//EEFBBFF34FHBGGHE0BC/@<CCGGFHHG?0?/FF1<FH1<FDB1<<F=1FG.<CAC000<G=GGD--:-:@.9/;0-;-AEF00C00BCFBF09BFBFFFFEB.9.-.;/:F/9A.@BDF..9.A.9/9.-9@BA.-@---.;/;/..9-;.9BF/9/9.;D.AE...
+```
+
+## 🧼 Step 2: Quality Control with `fastqc`
+
+If you have `fastqc` installed:
+
+``` bash
+mkdir -p qc_reports fastqc SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz -o qc_reports 
+```
+
+Then open the `.html` reports in a browser to inspect:
+
+-   Per-base quality
+
+-   Adapter content
+
+-   Overrepresented sequences
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq$ mkdir -p qc_reports
+fastqc SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz -o qc_reports
+application/gzip
+application/gzip
+Started analysis of SRR21839487_1.fastq.gz
+Approx 5% complete for SRR21839487_1.fastq.gz
+Approx 10% complete for SRR21839487_1.fastq.gz
+Approx 15% complete for SRR21839487_1.fastq.gz
+Approx 20% complete for SRR21839487_1.fastq.gz
+Approx 25% complete for SRR21839487_1.fastq.gz
+Approx 30% complete for SRR21839487_1.fastq.gz
+Approx 35% complete for SRR21839487_1.fastq.gz
+Approx 40% complete for SRR21839487_1.fastq.gz
+Approx 45% complete for SRR21839487_1.fastq.gz
+Approx 50% complete for SRR21839487_1.fastq.gz
+Approx 55% complete for SRR21839487_1.fastq.gz
+Approx 60% complete for SRR21839487_1.fastq.gz
+Approx 65% complete for SRR21839487_1.fastq.gz
+Approx 70% complete for SRR21839487_1.fastq.gz
+Approx 75% complete for SRR21839487_1.fastq.gz
+Approx 80% complete for SRR21839487_1.fastq.gz
+Approx 85% complete for SRR21839487_1.fastq.gz
+Approx 90% complete for SRR21839487_1.fastq.gz
+Approx 95% complete for SRR21839487_1.fastq.gz
+Analysis complete for SRR21839487_1.fastq.gz
+Started analysis of SRR21839487_2.fastq.gz
+Approx 5% complete for SRR21839487_2.fastq.gz
+Approx 10% complete for SRR21839487_2.fastq.gz
+Approx 15% complete for SRR21839487_2.fastq.gz
+Approx 20% complete for SRR21839487_2.fastq.gz
+Approx 25% complete for SRR21839487_2.fastq.gz
+Approx 30% complete for SRR21839487_2.fastq.gz
+Approx 35% complete for SRR21839487_2.fastq.gz
+Approx 40% complete for SRR21839487_2.fastq.gz
+Approx 45% complete for SRR21839487_2.fastq.gz
+Approx 50% complete for SRR21839487_2.fastq.gz
+Approx 55% complete for SRR21839487_2.fastq.gz
+Approx 60% complete for SRR21839487_2.fastq.gz
+Approx 65% complete for SRR21839487_2.fastq.gz
+Approx 70% complete for SRR21839487_2.fastq.gz
+Approx 75% complete for SRR21839487_2.fastq.gz
+Approx 80% complete for SRR21839487_2.fastq.gz
+Approx 85% complete for SRR21839487_2.fastq.gz
+Approx 90% complete for SRR21839487_2.fastq.gz
+Approx 95% complete for SRR21839487_2.fastq.gz
+Analysis complete for SRR21839487_2.fastq.gz
+```
+
+![](images/屏幕截图%202025-09-29%20150526.png)
+
+![](images/屏幕截图%202025-09-29%20150608.png)
+
+![](images/屏幕截图%202025-09-29%20150627.png)
+
+## 🔍 FastQC Highlights for `SRR21839487_1.fastq.gz`
+
+### Per Base Sequence Quality
+
+-   Most bases score **above Q30**, which is excellent.
+
+-   Slight drop near the end (\~base 240–250), but still acceptable.
+
+-   Action: **Optional trimming** of trailing bases if you're aiming for ultra-clean reads.
+
+### ⚠️ Content Duplication Levels
+
+-   If duplication is high, it could indicate:
+
+    -   PCR bias
+
+    -   Low complexity regions
+
+    -   Over-sequencing
+
+-   Action: Consider deduplication or filtering if it affects downstream diversity metrics.
+
+### ⚠️ Overrepresented Sequences
+
+-   These often include:
+
+    -   Adapter contamination
+
+    -   Primer remnants
+
+    -   Host DNA (if not removed)
+
+-   Action: Use `cutadapt` or `trimmomatic` to remove adapters and low-complexity reads.
+
+## 🛠️ Suggested Next Step: Trimming + Adapter Removal
+
+Here’s a bash command using `cutadapt`:
+
+``` bash
+cutadapt -q 20 -m 100 \
+  -a ADAPTER_SEQ_FWD -A ADAPTER_SEQ_REV \
+  -o trimmed_1.fastq.gz -p trimmed_2.fastq.gz \
+  SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz
+```
+
+Replace `ADAPTER_SEQ_FWD` and `ADAPTER_SEQ_REV` with actual adapter sequences (e.g., Illumina universal adapters).
+
+## ✅ How to Fix It
+
+You need to replace `ADAPTER_SEQ_FWD` and `ADAPTER_SEQ_REV` with the actual adapter sequences used in your sequencing run.
+
+### 🔹 Common Illumina Adapter Sequences
+
+If your reads were generated using standard Illumina protocols (e.g. MiSeq), these are typical:
+
+``` bash
+# Forward adapter (Read 1) -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA  
+# Reverse adapter (Read 2) -A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT 
+```
+
+So your corrected command would be:
+
+``` bash
+cutadapt -q 20 -m 100 \
+  -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA \
+  -A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT \
+  -o trimmed_1.fastq.gz -p trimmed_2.fastq.gz \
+  SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz
+```
+
+If you’re unsure what adapters were used, FastQC’s “Overrepresented Sequences” section usually gives you the exact sequence to target.
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq/qc_reports$ cd ~/microbiome/data/raw_fastq
+jayz@localhost:~/microbiome/data/raw_fastq$ cutadapt -q 20 -m 100 \
+  -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA \
+  -A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT \
+  -o trimmed_1.fastq.gz -p trimmed_2.fastq.gz \
+  SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -q 20 -m 100 -a AGATCGGAAGAGCACACGTCTGAACTCCAGTCA -A AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT -o trimmed_1.fastq.gz -p trimmed_2.fastq.gz SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz
+Processing paired-end reads on 1 core ...
+Done           00:00:01        72,036 reads @  25.8 µs/read;   2.32 M reads/minute
+Finished in 1.864 s (25.883 µs/read; 2.32 M reads/minute).
+
+=== Summary ===
+
+Total read pairs processed:             72,036
+  Read 1 with adapter:                     390 (0.5%)
+  Read 2 with adapter:                     518 (0.7%)
+
+== Read fate breakdown ==
+Pairs that were too short:               8,680 (12.0%)
+Pairs written (passing filters):        63,356 (88.0%)
+
+Total basepairs processed:    35,906,714 bp
+  Read 1:    17,952,952 bp
+  Read 2:    17,953,762 bp
+Quality-trimmed:               2,818,494 bp (7.8%)
+  Read 1:     1,252,848 bp
+  Read 2:     1,565,646 bp
+Total written (filtered):     31,134,259 bp (86.7%)
+  Read 1:    15,577,598 bp
+  Read 2:    15,556,661 bp
+
+=== First read: Adapter 1 ===
+
+Sequence: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA; Type: regular 3'; Length: 33; Trimmed: 390 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20-29 bp: 2; 30-33 bp: 3
+
+Bases preceding removed adapters:
+  A: 42.8%
+  C: 14.9%
+  G: 25.9%
+  T: 16.4%
+  none/other: 0.0%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       319     1125.6  0       319
+4       50      281.4   0       50
+5       1       70.3    0       1
+6       3       17.6    0       3
+7       5       4.4     0       5
+9       1       0.3     0       1
+11      2       0.0     1       2
+12      8       0.0     1       8
+14      1       0.0     1       0 1
+
+
+=== Second read: Adapter 2 ===
+
+Sequence: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT; Type: regular 3'; Length: 33; Trimmed: 518 times
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1; 20-29 bp: 2; 30-33 bp: 3
+
+Bases preceding removed adapters:
+  A: 46.1%
+  C: 15.8%
+  G: 18.1%
+  T: 19.9%
+  none/other: 0.0%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       254     1125.6  0       254
+4       41      281.4   0       41
+5       22      70.3    0       22
+6       7       17.6    0       7
+7       3       4.4     0       3
+9       1       0.3     0       1
+10      1       0.1     1       1
+11      1       0.0     1       1
+12      7       0.0     1       5 2
+13      1       0.0     1       1
+14      3       0.0     1       3
+15      2       0.0     1       2
+17      5       0.0     1       3 2
+18      1       0.0     1       1
+19      3       0.0     1       3
+20      3       0.0     2       3
+21      2       0.0     2       1 1
+22      1       0.0     2       1
+23      6       0.0     2       5 1
+24      16      0.0     2       11 3 2
+25      13      0.0     2       9 4
+26      4       0.0     2       2 2
+27      2       0.0     2       2
+28      10      0.0     2       9 1
+29      2       0.0     2       1 1
+30      13      0.0     3       13
+31      1       0.0     3       0 1
+32      14      0.0     3       9 3 2
+33      5       0.0     3       4 0 1
+34      5       0.0     3       1 3 1
+35      1       0.0     3       0 1
+37      1       0.0     3       1
+38      2       0.0     3       0 2
+40      1       0.0     3       0 1
+41      3       0.0     3       2 0 1
+42      4       0.0     3       3 0 1
+43      1       0.0     3       1
+44      1       0.0     3       1
+45      8       0.0     3       7 0 1
+46      2       0.0     3       0 2
+47      1       0.0     3       1
+48      4       0.0     3       3 1
+49      2       0.0     3       0 2
+51      2       0.0     3       0 1 1
+52      1       0.0     3       0 1
+53      1       0.0     3       0 0 1
+54      1       0.0     3       1
+59      1       0.0     3       0 0 0 1
+60      1       0.0     3       1
+63      1       0.0     3       0 0 1
+65      3       0.0     3       3
+66      2       0.0     3       1 0 1
+67      1       0.0     3       0 1
+68      1       0.0     3       1
+69      1       0.0     3       1
+77      1       0.0     3       0 0 1
+79      1       0.0     3       1
+81      1       0.0     3       1
+85      1       0.0     3       0 1
+89      2       0.0     3       0 0 2
+91      2       0.0     3       0 2
+93      2       0.0     3       1 0 1
+96      1       0.0     3       1
+97      1       0.0     3       0 0 1
+99      1       0.0     3       1
+101     1       0.0     3       0 1
+104     1       0.0     3       0 0 0 1
+105     2       0.0     3       0 2
+106     1       0.0     3       1
+112     1       0.0     3       0 1
+126     1       0.0     3       1
+141     1       0.0     3       0 0 1
+143     1       0.0     3       1
+```
+
+## ✅ Key Takeaways from Your Trimming Report
+
+### 🔹 Adapter Removal
+
+-   **Read 1**: 390 adapters trimmed (0.5%)
+
+-   **Read 2**: 518 adapters trimmed (0.7%)
+
+-   ✅ Low adapter contamination — good sign of clean library prep
+
+### 🔹 Quality Trimming
+
+-   **\~7.8% of bases** were trimmed due to low quality
+
+-   ✅ Indicates moderate quality drop-off, mostly at read ends
+
+### 🔹 Read Filtering
+
+-   **12% of read pairs** were discarded for being too short
+
+-   **88% retained** — excellent retention rate for microbiome analysis
+
+## 🧪 Optional: Re-run FastQC on Trimmed Files
+
+``` bash
+fastqc trimmed_1.fastq.gz trimmed_2.fastq.gz -o qc_reports_trimmed 
+```
+
+This confirms whether trimming improved quality and removed problematic sequences.
+
+![](images/屏幕截图%202025-09-29%20151804.png)
+
+![](images/屏幕截图%202025-09-29%20151813.png)
+
+## 🔍 Quality Insights from Your Trimmed Reads
+
+### 1. **Per Base Sequence Content**
+
+-   The base composition still shows **non-random fluctuations**, especially at the start of the reads.
+
+-   This is common in **amplicon sequencing** (like 16S rRNA) due to primer bias.
+
+-   ✅ Not necessarily a problem — but good to be aware of when interpreting diversity metrics.
+
+### 2. **GC Content Distribution**
+
+-   The GC curve aligns reasonably well with the theoretical distribution.
+
+-   ✅ Suggests no major contamination or unexpected bias.
+
+### 3. **Sequence Duplication Levels**
+
+-   \~20% of sequences would remain after deduplication.
+
+-   ⚠️ Moderate duplication — could be due to:
+
+    -   PCR amplification
+
+    -   Low-complexity regions
+
+    -   Small library size
+
+### 4. **Overrepresented Sequences**
+
+-   Several sequences appear \>2% of the time.
+
+-   All marked as “No Hit” — likely primer remnants or conserved regions.
+
+-   ⚠️ Consider filtering these if they skew taxonomic profiles.
+
+## 🛠️ What You Can Do Next
+
+### 🔹 Option 1: Deduplicate (Optional)
+
+Use `vsearch` or `bbduk.sh` to remove exact duplicates:
+
+``` bash
+vsearch --derep_fulllength trimmed_1.fastq.gz --output clean_1.fastq
+```
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq$ vsearch --derep_fulllength trimmed_1.fastq.gz --output clean_1.fastq
+vsearch v2.27.0_linux_x86_64, 11.5GB RAM, 16 cores
+https://github.com/torognes/vsearch
+
+
+
+Fatal error: Files compressed with gzip are not supported
+```
+
+## ✅ Fix: Decompress the FASTQ File First
+
+Run this in your `raw_fastq` directory:
+
+``` bash
+gunzip trimmed_1.fastq.gz 
+```
+
+This will produce:
+
+``` bash
+trimmed_1.fastq 
+```
+
+Then run `vsearch`:
+
+``` bash
+vsearch --fastx_uniques trimmed_1.fastq \
+  --fastqout clean_1.fastq \
+  --sizeout --relabel_sha1
+```
+
+## 🧪 What This Does
+
+-   Removes **exact duplicate sequences**
+
+-   Outputs a cleaned FASTQ file (`clean_1.fastq`) with unique reads
+
+-   Useful for reducing PCR bias and improving diversity estimates
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq$ vsearch --fastx_uniques trimmed_1.fastq \
+  --fastqout clean_1.fastq \
+  --sizeout --relabel_sha1
+vsearch v2.27.0_linux_x86_64, 11.5GB RAM, 16 cores
+https://github.com/torognes/vsearch
+
+Dereplicating file trimmed_1.fastq 100%
+15577598 nt in 63356 seqs, min 100, max 250, avg 246
+Sorting 100%
+32996 unique sequences, avg cluster 1.9, median 1, max 1345
+Writing FASTQ output file 100%
+```
+
+## ✅ Summary of Deduplication Results
+
+| Metric               | Value                 |
+|----------------------|-----------------------|
+| Total input reads    | 63,356                |
+| Unique sequences     | 32,996                |
+| Average cluster size | 1.9                   |
+| Largest cluster      | 1,345 identical reads |
+| Output file          | `clean_1.fastq`       |
+
+### 🔹 What This Means
+
+-   You've removed **redundant reads**, likely caused by PCR amplification.
+
+-   Your dataset is now **leaner and more representative** of true biological diversity.
+
+-   The `--sizeout` tag added abundance info to each read header, which is useful for downstream tools like **OTU clustering** or **ASV inference**.
+
+***We do the same thing with the \_2 fastq,decompress `trimmed_2.fastq.gz`, deduplicate it with `vsearch`, and use both `clean_1.fastq` + `clean_2.fastq` for paired-end QIIME2***
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq$ gunzip trimmed_2.fastq.gz
+jayz@localhost:~/microbiome/data/raw_fastq$ vsearch --fastx_uniques trimmed_2.fastq \
+  --fastqout clean_2.fastq \
+  --sizeout --relabel_sha1
+vsearch v2.27.0_linux_x86_64, 11.5GB RAM, 16 cores
+https://github.com/torognes/vsearch
+
+Dereplicating file trimmed_2.fastq 100%
+15556661 nt in 63356 seqs, min 100, max 250, avg 246
+Sorting 100%
+38433 unique sequences, avg cluster 1.6, median 1, max 155
+Writing FASTQ output file 100%
+```
+
+## 🔜 Next Step: Taxonomic Profiling
+
+## 🏆 Gold Standard: **QIIME2 + DADA2 + SILVA**
+
+This trio is the backbone of many high-impact microbiome studies.
+
+### 🔹 QIIME2
+
+-   Modular, reproducible, and community-supported
+
+-   Handles everything: import, denoising, taxonomy, diversity, visualization
+
+-   Works well with paired-end FASTQ files
+
+### 🔹 DADA2 (within QIIME2)
+
+-   Performs **error correction** and **ASV inference**
+
+-   More accurate than traditional OTU clustering
+
+-   Removes chimeras and low-quality reads
+
+### 🔹 SILVA Database
+
+-   Comprehensive 16S rRNA reference
+
+-   Updated regularly
+
+-   Preferred over Greengenes (which is outdated)
+
+## 🛠️ What You’ll Need
+
+-   Your trimmed paired-end reads:
+
+    -   `trimmed_1.fastq.gz`
+
+    -   `trimmed_2.fastq.gz`
+
+-   A sample metadata file (can be minimal for now)
+
+-   QIIME2 installed in a Conda environment
+
+## 🧪 Typical Workflow
+
+1.  **Import data into QIIME2**
+
+2.  **Denoise with DADA2**
+
+3.  **Assign taxonomy using SILVA**
+
+4.  **Generate diversity metrics**
+
+5.  **Visualize with bar plots, PCoA, heatmaps**
+
+Check the file
+
+``` bash
+jayz@localhost:~/microbiome/data/raw_fastq$ ls
+SRR21839487_1.fastq.gz  clean_1.fastq  qc_reports          trimmed_1.fastq
+SRR21839487_2.fastq.gz  clean_2.fastq  qc_reports_trimmed  trimmed_2.fastq
+```
+
+## 📦 Step 1: Compress the Clean FASTQ Files
+
+QIIME2 expects `.fastq.gz` format for import. Run:
+
+```         
+gzip clean_1.fastq 
+gzip clean_2.fastq 
+```
+
+This gives you:
+
+-   `clean_1.fastq.gz`
+
+-   `clean_2.fastq.gz`
+
+## 📁 Step 2: Create a Manifest File
+
+QIIME2 uses a manifest to map sample IDs to file paths.
+
+Create a file called `manifest.csv` like this:
+
+```         
+cat <<EOF > manifest.csv
+sample-id,absolute-filepath,direction
+SRR21839487,/home/jayz/microbiome/data/raw_fastq/clean_1.fastq.gz,forward
+SRR21839487,/home/jayz/microbiome/data/raw_fastq/clean_2.fastq.gz,reverse
+EOF
+```
+
+> Adjust the path if needed — it must be absolute.
+
+## 🧪 Step 3: Import into QIIME2
+
+Activate your QIIME2 conda environment, then run:
+
+bash
+
+```         
+qiime tools import \
+  --type 'SampleData[PairedEndSequencesWithQuality]' \
+  --input-path manifest.csv \
+  --output-path paired-end.qza \
+  --input-format PairedEndFastqManifestPhred33V2
+```
+
+check
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ ls
+SRR21839487_1.fastq.gz  clean_1.fastq.gz  manifest.csv  qc_reports_trimmed  trimmed_2.fastq
+SRR21839487_2.fastq.gz  clean_2.fastq.gz  qc_reports    trimmed_1.fastq
+```
+
+QIIME2 isn’t available via `apt install`. It’s designed to run inside a **Conda environment**, which gives you full control over dependencies and plugins.
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ sudo apt insatll qiime
+E: Invalid operation insatll
+jayz@localhost:~/microbiome/data/raw_fastq$ sudo apt install qiime
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+Package qiime is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+E: Package 'qiime' has no installation candidate
+```
+
+## 🧬 Option 1: **R-Based Pipeline (Gold Standard Without QIIME2)**
+
+This is widely used in publications and doesn't require QIIME2 or Conda.
+
+### 🔧 Core R Packages:
+
+| Package    | Purpose                           |
+|------------|-----------------------------------|
+| `dada2`    | ASV inference, quality filtering  |
+| `phyloseq` | Taxonomic analysis, visualization |
+| `DECIPHER` | Sequence alignment                |
+| `DESeq2`   | Differential abundance analysis   |
+
+### 🛠️ Setup:
+
+1.  Install R and RStudio (if not already)
+
+2.  Install packages:
+
+    r
+
+    ```         
+    install.packages("BiocManager") 
+    BiocManager::install(c("dada2", "phyloseq", "DECIPHER", "DESeq2")) 
+    ```
+
+### 🧪 Workflow:
+
+-   Import `clean_1.fastq` and `clean_2.fastq`
+
+-   Run `filterAndTrim()` and `learnErrors()` in `dada2`
+
+-   Infer ASVs and assign taxonomy using SILVA
+
+-   Visualize with `phyloseq`
+
+This is a robust, publication-grade pipeline — and it runs beautifully on Windows.
+
+***Now we have to move to windows and do it with python and R***
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ tree ~/microbiome
+/home/jayz/microbiome
+└── data
+    └── raw_fastq
+        ├── SRR21839487_1.fastq.gz
+        ├── SRR21839487_2.fastq.gz
+        ├── clean_1.fastq.gz
+        ├── clean_2.fastq.gz
+        ├── manifest.csv
+        ├── qc_reports
+        │   ├── SRR21839487_1_fastqc.html
+        │   ├── SRR21839487_1_fastqc.zip
+        │   ├── SRR21839487_2_fastqc.html
+        │   ├── SRR21839487_2_fastqc.zip
+        │   ├── trimmed_1.fastq.gz
+        │   └── trimmed_2.fastq.gz
+        ├── qc_reports_trimmed
+        │   ├── trimmed_1_fastqc.html
+        │   ├── trimmed_1_fastqc.zip
+        │   ├── trimmed_2_fastqc.html
+        │   └── trimmed_2_fastqc.zip
+        ├── trimmed_1.fastq
+        └── trimmed_2.fastq
+
+5 directories, 17 files
+```
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ # 1. Remove the initial raw FASTQ files
+rm SRR21839487_1.fastq.gz SRR21839487_2.fastq.gz
+
+# 2. Remove the intermediate, uncompressed trimmed files
+rm trimmed_1.fastq trimmed_2.fastq
+jayz@localhost:~/microbiome/data/raw_fastq$ cp -r ~/microbiome/data/raw_fastq/* /mnt/e/acode/wsl/data
+```
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq/qc_reports$ find . -name "*.fastq.gz" -delete
+find . -name "*.fastq" -delete
+jayz@localhost:~/microbiome/data/raw_fastq/qc_reports$ ls
+SRR21839487_1_fastqc.html  SRR21839487_1_fastqc.zip  SRR21839487_2_fastqc.html  SRR21839487_2_fastqc.zip
+jayz@localhost:~/microbiome/data/raw_fastq/qc_reports$ find . -name "*.zip" -delete
+jayz@localhost:~/microbiome/data/raw_fastq/qc_reports$ ls
+SRR21839487_1_fastqc.html  SRR21839487_2_fastqc.html
+jayz@localhost:~/microbiome/data/raw_fastq/qc_reports$ cd ~/microbiome/data/raw_fastq/
+jayz@localhost:~/microbiome/data/raw_fastq$ find . -name "*.fastq.gz" -delete
+jayz@localhost:~/microbiome/data/raw_fastq$ ls
+manifest.csv  qc_reports  qc_reports_trimmed
+jayz@localhost:~/microbiome/data/raw_fastq$ tree
+.
+├── manifest.csv
+├── qc_reports
+│   ├── SRR21839487_1_fastqc.html
+│   └── SRR21839487_2_fastqc.html
+└── qc_reports_trimmed
+    ├── trimmed_1_fastqc.html
+    ├── trimmed_1_fastqc.zip
+    ├── trimmed_2_fastqc.html
+    └── trimmed_2_fastqc.zip
+
+3 directories, 7 files
+```
+
+## Run away for Windows
+
+```{r}
+# Define the path to your 'raw_fastq' directory
+# The '~' in R is typically recognized as the home directory, similar to Linux.
+data_path <- "E:/acode/wsl/data"
+# List all files recursively, including their full relative path
+# This gives you the raw data to show the structure.
+file_list <- list.files(
+  path = data_path,
+  recursive = TRUE,
+  full.names = FALSE # Use FALSE to show the relative path structure
+)
+
+# Print the list (this clearly shows the directory structure)
+cat("Structure of files relative to:", data_path, "\n")
+cat("--------------------------------------------------\n")
+cat(file_list, sep = "\n")
+
+# --- Optional: Displaying with Indentation (More like 'tree') ---
+# This requires a bit of string manipulation to add visual depth.
+
+# Function to print a list of paths with 'tree' like indentation
+print_tree_structure <- function(paths) {
+  # Sort for clean, consistent output
+  paths <- sort(paths)
+
+  # Process and print each path
+  for (path in paths) {
+    # Split the path into its components (directories and file)
+    parts <- strsplit(path, "/")[[1]]
+    
+    # Calculate depth and create indentation
+    depth <- length(parts)
+    indent <- paste0(rep("│  ", depth - 1), collapse = "")
+    
+    # The last element is the file/directory name itself
+    name <- parts[depth]
+    
+    # Print with '├──' or '└──' for structure
+    if (path == paths[length(paths)] || grepl(dirname(path), paths[which(paths == path) + 1])) {
+      # Use the 'middle' branch character (just an approximation)
+      cat(indent, "├── ", name, "\n", sep = "")
+    } else {
+      # Use the 'end' branch character
+      cat(indent, "└── ", name, "\n", sep = "")
+    }
+  }
+}
+
+# Run the custom function on your file list
+cat("\nSimulated 'tree' view of the path:\n")
+cat("----------------------------------\n")
+cat(basename(data_path), "\n") # Print the root directory name
+print_tree_structure(file_list)
+```
+
+## 🛠️ Next Step: R Script Setup
+
+Here’s a scaffolded R script to kick off your analysis. You can run this in RStudio on Windows:
+
+install the packages that we need
+
+```{r}
+# 1. Install packages from CRAN (Comprehensive R Archive Network)
+BiocManager::install("dada2")
+
+# 2. Install BiocManager, which is needed for Bioconductor packages
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# 3. Install packages from Bioconductor
+BiocManager::install("phyloseq")
+BiocManager::install("Biostrings")
+
+# Once installed, you can load them using:
+# library(dada2)
+# library(phyloseq)
+# library(Biostrings)
+```
+
+```{r}
+BiocManager::install("dada2")
+```
+
+```{r}
+# Load packages
+library(dada2)
+library(phyloseq)
+library(Biostrings)
+
+# Set your path
+path <- "E:/acode/wsl/data"
+fnFs <- file.path(path, "clean_1.fastq.gz")
+fnRs <- file.path(path, "clean_2.fastq.gz")
+
+# Inspect quality profiles (optional)
+plotQualityProfile(fnFs)
+plotQualityProfile(fnRs)
+
+# Filter and trim
+filtFs <- file.path(path, "filt_F.fastq.gz")
+filtRs <- file.path(path, "filt_R.fastq.gz")
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs,
+                     truncLen=c(240,240), maxN=0, maxEE=c(2,2),
+                     truncQ=2, rm.phix=TRUE, compress=TRUE, multithread=FALSE)
+
+# Learn error rates
+errF <- learnErrors(filtFs, multithread=FALSE)
+errR <- learnErrors(filtRs, multithread=FALSE)
+
+# Dereplication
+derepF <- derepFastq(filtFs)
+derepR <- derepFastq(filtRs)
+
+# Sample name
+sample.name <- "SRR21839487"
+
+# DADA2 core inference
+dadaF <- dada(derepF, err=errF, multithread=FALSE)
+dadaR <- dada(derepR, err=errR, multithread=FALSE)
+
+# Merge paired reads
+mergers <- mergePairs(dadaF, derepF, dadaR, derepR)
+
+# Create sequence table
+seqtab <- makeSequenceTable(mergers)
+
+# Remove chimeras
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=FALSE)
+
+# Save output
+saveRDS(seqtab.nochim, file.path(path, "seqtab_nochim.rds"))
+```
+
+![](plot-5.png)
+
+![](plot-6.png)
+
+and we could not get the RDSdata cuz
+
+**\
+Error:**
+
+! Mismatched forward and reverse sequence files: 32996, 38433.
+
+Hide Traceback
+
+1.  └─dada2::filterAndTrim(...)
+
+2.  └─**parallel**::mcmapply(...)
+
+3.  └─**base**::mapply(...)
+
+4.  └─dada2 (local) \`\<fn\>\`(...)
+
+error means your forward and reverse read files have **different numbers of sequences** — `clean_1.fastq.gz` has 32,996 reads, while `clean_2.fastq.gz` has 38,433. This mismatch breaks paired-end processing in `dada2`, which expects a one-to-one correspondence between reads.
+
+## 🧠 Why This Happened
+
+You deduplicated each file independently using `vsearch --fastx_uniques`, which doesn’t preserve pairing. So now:
+
+-   Some forward reads were removed as duplicates
+
+-   But their reverse counterparts remain — and vice versa
+
+I run a long long way to solve this problems
+
+first i do git clone the tool called fastq-pair,and actually we could not use directly,so we have to installed the MSYS2 ,**MSYS2** is a collection of tools and libraries providing you with an easy-to-use environment for building, installing and running native Windows software.
+
+It consists of a command line terminal called [mintty](https://mintty.github.io/), bash, version control systems like git and subversion, tools like tar and awk and even build systems like autotools, all based on a modified version of [Cygwin](https://cygwin.com/). Despite some of these central parts being based on Cygwin, the main focus of MSYS2 is to provide a build environment for native Windows software and the Cygwin-using parts are kept at a minimum. MSYS2 provides up-to-date native builds for GCC, mingw-w64, CPython, CMake, Meson, OpenSSL, FFmpeg, Rust, Ruby, just to name a few.
+
+After install that we have to open the MSYS2 MINGW64 shell and
+
+No and fuck
+
+Actually we want to run the tool fastq-paired bt it is just fucking shit and just mess it up
+
+we go back the wsl and copy the clean_1.fastq and clean_2.fastq to the wsl
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ cp /mnt/e/acode/wsl/data/clean_1.fastq ~/microbiome/data/raw_fastq/clean_1.f
+astq
+cp /mnt/e/acode/wsl/data/clean_2.fastq ~/microbiome/data/raw_fastq/clean_2.fastq
+jayz@localhost:~/microbiome/data/raw_fastq$ ls
+clean_1.fastq  manifest.csv  qc_reports_trimmed     sync_clean_2.fastq.gz
+clean_2.fastq  qc_reports    sync_clean_1.fastq.gz
+```
+
+and we just zip the fastq and turn into the fastq.gz file to make the tool works
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ gzip clean_1.fastq
+gzip clean_2.fastq
+```
+
+run the tool called BBMap
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ # 1. Navigate to your data directory
+cd ~/microbiome/data/raw_fastq
+
+# 2. Define files and run repair.sh
+R1_IN="clean_1.fastq.gz"
+R2_IN="clean_2.fastq.gz"
+R1_OUT="sync_clean_1.fastq.gz"
+R2_OUT="sync_clean_2.fastq.gz"
+
+~/bbmap/repair.sh in=$R1_IN in2=$R2_IN out=$R1_OUT out2=$R2_OUT overwrite=t
+```
+
+and we see now
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ # 1. Navigate to your data directory
+cd ~/microbiome/data/raw_fastq
+
+# 2. Define files and run repair.sh
+R1_IN="clean_1.fastq.gz"
+R2_IN="clean_2.fastq.gz"
+R1_OUT="sync_clean_1.fastq.gz"
+R2_OUT="sync_clean_2.fastq.gz"
+
+~/bbmap/repair.sh in=$R1_IN in2=$R2_IN out=$R1_OUT out2=$R2_OUT overwrite=t
+java -ea -Xmx6272m -cp /home/jayz/bbmap/current/ jgi.SplitPairsAndSingles rp in=clean_1.fastq.gz in2=clean_2.fastq.gz out=sync_clean_1.fastq.gz out2=sync_clean_2.fastq.gz overwrite=t
+Executing jgi.SplitPairsAndSingles [rp, in=clean_1.fastq.gz, in2=clean_2.fastq.gz, out=sync_clean_1.fastq.gz, out2=sync_clean_2.fastq.gz, overwrite=t]
+
+Set INTERLEAVED to false
+Started output stream.
+
+Input:                          71429 reads             17368864 bases.
+Result:                         71429 reads (100.00%)   17368864 bases (100.00%)
+Pairs:                          514 reads (0.72%)       128180 bases (0.74%)
+Singletons:                     70915 reads (99.28%)    17240684 bases (99.26%)
+
+Time:                           0.244 seconds.
+Reads Processed:       71429    292.53k reads/sec
+Bases Processed:      17368k    71.13m bases/sec
+```
+
+The BBMap script `repair.sh` (which executes `jgi.SplitPairsAndSingles`) **successfully ran**, but the output shows that it **did not fully synchronize your files** as expected for paired-end processing.
+
+The synchronization failed to find a high number of matching pairs, which is a significant problem for your downstream DADA2 analysis.
+
+### Analysis of the Output
+
+|  |  |  |
+|------------------------|------------------------|------------------------|
+| Statistic | Value | Interpretation |
+| **Input Reads** | 71429 | This is the total number of reads processed (32,996 from R1 + 38,433 from R2). |
+| **Pairs** | **514 reads (0.72%)** | **This is the critical line.** It means `repair.sh` could only find 514 perfectly matched read pairs between your two files. |
+| **Singletons** | **70915 reads (99.28%)** | These are the reads that had no partner in the other file. |
+
+### The Problem
+
+A high-quality paired-end sequencing run should yield **nearly 100% pairs**. Your result shows only 0.72% of the reads are paired.
+
+This indicates a serious issue that **cannot be fixed by simply running `repair.sh` again**. The issue is likely one of the following:
+
+1.  **Incorrect File Naming/Ordering:** The sequence IDs in the `clean_1.fastq.gz` and `clean_2.fastq.gz` files do not match the expected format for paired reads (e.g., they might be missing the `/1` and `/2` suffix or the entire read IDs were corrupted during an earlier cleaning step).
+
+2.  **Files Are Not Paired:** It's possible the `clean_1.fastq.gz` and `clean_2.fastq.gz` files are not the forward and reverse reads from the *same* set of sequences, but rather two entirely different, unsorted single-end files.
+
+3.  **Prior Filtering Broke Pairing:** An earlier trimming/filtering step dropped reads from the two files independently, destroying the paired order and breaking the sequence ID correspondence.
+
+```         
+jayz@localhost:~/microbiome/data/raw_fastq$ echo $(( $(zcat clean_1.fastq.gz | wc -l) / 4 ))
+echo $(( $(zcat clean_2.fastq.gz | wc -l) / 4 ))
+32996
+38433
+jayz@localhost:~/microbiome/data/raw_fastq$ # 提取 ID（fastq 第一行形如: @SEQID ...，我们取第一个空格前的部分）
+zcat clean_1.fastq.gz | awk 'NR%4==1{print substr($1,2)}' > ids_1.txt
+zcat clean_2.fastq.gz | awk 'NR%4==1{print substr($1,2)}' > ids_2.txt
+
+# 统计各自独有的
+comm -23 <(sort ids_1.txt) <(sort ids_2.txt) > ids_only_in_1.txt  # 只出现在 1 的
+comm -13 <(sort ids_1.txt) <(sort ids_2.txt) > ids_only_in_2.txt  # 只出现在 2 的
+
+wc -l ids_only_in_1.txt ids_only_in_2.txt
+  32739 ids_only_in_1.txt
+  38176 ids_only_in_2.txt
+  70915 total
+jayz@localhost:~/microbiome/data/raw_fastq$ # 假设你已安装 bbmap（包含 repair.sh）
+repair.sh in=clean_1.fastq.gz in2=clean_2.fastq.gz out=clean_R1_paired.fastq.gz out2=clean_R2_paired.fastq.gz outs=clean_singletons.fastq.gz repair
+repair.sh: command not found
+jayz@localhost:~/microbiome/data/raw_fastq$ echo "---- R1 前 20 ----"
+head -n 20 ids_1.txt
+echo "---- R2 前 20 ----"
+head -n 20 ids_2.txt
+---- R1 前 20 ----
+461eb71a1d39ae876edfe904326fe991f0e5f110;size=1345
+2ce4de3fb061a9d5b0deecb17b521a022f9a6594;size=1029
+dddb063e80b66a192c96a5d8963d914758c0cfb5;size=999
+2bde6f3c07880d23166bf82a3f71f0641ec54638;size=888
+8c61eb3b319bd76ddc7f51e6ec8ba2af8e1e2fc3;size=710
+1bbe8b53bde1ae1c853d63777e1cb8a5b85a76d1;size=680
+e9aba854f42e2e57cee92d9eb3dc930233d42c69;size=630
+0f80f18a3f434df8c75fdd1768dc31ed492120ff;size=598
+a9164fd117d18218dad83a03e60478e3f673cf41;size=542
+9a91ba318ffc9e0eb67c1b306850fcffc155707d;size=443
+905c00954ec3bfebe2ef73d6f372b543f1e9a843;size=428
+6adfbdbedf93c89727dfe16c48ec462a7a340057;size=400
+15b08e12e28f5fd3dbd5c2acb7ea46d595469ecd;size=364
+3659cf091bef88ae2e5e7b888dc91a63dbf6df1e;size=362
+2e8ce1a7ba663ce6861d0c7241da4f8a01c13a48;size=356
+cdb10638bf5f1b68fe22f8ff211cf65107e7292e;size=355
+555e507b631b399cf8a7b59e52098850db91937d;size=315
+a18bd9550581798efb58d13ba7eacfa9d8dfd3f8;size=288
+10780419f14120fc8118699d2c45cd03ba502b3a;size=279
+0556ca5fe23e641eeb336e3bf97216d664fb5a31;size=272
+---- R2 前 20 ----
+325ae73b9e895fe7ce51fdb37fb2c3d7692d27a0;size=155
+a9a501ce3f2d43a9d7de59fb5bfdbc480cd671cc;size=138
+0c00c575d8ba3dd7d043607819dcd20797b0adb5;size=133
+fcf635e9cc6e18ad2b2eac33bf925719ae61d5ec;size=123
+5a864ca622ec242ab63e416fbc6096d4504a48bc;size=121
+c52cc69b00eea628eced286afc03598b47ef9235;size=119
+35523fd2bcfb501e1aabce76e3c4a47b1b1fda0a;size=119
+a2aaa4af311c163ff8a6ac4911728e6725624dc8;size=116
+33fbd8549b9646ce73b70f360db493207868f50f;size=116
+caa742d58c5390bedd781d4257893a5c87b4005a;size=114
+c37b0671f48d830ebbad962f25aea59b02ba8a11;size=114
+ddb5fa6bd6f063d1b7faa83ee32fe7479cf8a1ac;size=113
+58df1b1c70acd0a4a2dbc2a852560e871758c939;size=112
+60f12bf116154c3ec343a847e1d454f900129b96;size=112
+63a18fa5f83e1670d9c4a55080961627f5ffe9f2;size=111
+419303b3549cc53fb1294a527f5fe6f6b6d035e1;size=110
+1a7a085298081d4978eb3df42990c785d2c47edd;size=108
+61b4db4b13d1cc503560f259e9f76cecf541f179;size=107
+42e86ed1aa261ee4c9f8daac47749504a76b5df0;size=106
+3b6aa53a71eb6d287a3ddd48c1c5cc9c6f3ef2a2;size=106
+jayz@localhost:~/microbiome/data/raw_fastq$ echo "R1 总数:"
+wc -l ids_1.txt
+echo "R2 总数:"
+wc -l ids_2.txt
+echo "交集数量:"
+comm -12 <(sort ids_1.txt) <(sort ids_2.txt) | wc -l
+R1 总数:
+32996 ids_1.txt
+R2 总数:
+38433 ids_2.txt
+交集数量:
+257
+```
+
+die
+
+finish we just run a bunch of shit,actually
+
+# 一、为什么会出现“几乎没有交集（只有 257）”的核心原因（按概率从大到小）
+
+1.  **在某步对 R1/R2 分别做了 dereplication / 聚合（`--sizeout` 那类）**\
+    你 `ids_*.txt` 里显示的 `…;size=1345` 正是去重（dereplicate）或聚合工具（如 `vsearch --derep_fulllength`、USEARCH、某些 OTU 工具）常见的 header 格式。若 R1 与 R2 各自独立做了 derep，就会变成两套互不对应的代表序列集合——配对信息就丢了。
+
+    **在某步只对单端运行了质控/过滤/去冗余**\
+    有些脚本或命令写得不严谨，可能只把某个 fastq 传给工具处理，另一个 fastq 没被同步处理，造成数量和 ID 的不一致
+
+    **把两端当作独立样本处理或样本混淆**\
+    比如误把 R2 当成另一样本的 R1 来处理，或文件名/路径搞错，导致两个文件根本不是同一对的两个方向
+
+    **ID 被改写方式不同**（ less likely given交集极小）\
+    如果只是 `/1` vs `/2`、空格注释导致的差异，正规化通常能恢复配对。但你交集只有 257，说明不是简单后缀问题（且你已经展示过样例并非 `/1` 后缀，而是 `;size=` 格式）。
+
+    **流水线中某一步把 reads 转换成代表序列 fasta/fastq（并丢失原始 read-level pairing）**\
+    例如有人在做 OTU 构建或用某些工具把 reads 聚成“序列+size”形式并输出 fastq，结果得到两个“各自的代表序列集合”。
+
+### 🔑 教训
+
+1.  **不要在 paired-end 数据上单独对两端去重**，尤其是用 `vsearch --derep_fulllength`、`usearch -fastx_uniques` 这类工具。
+
+    如果想做 paired DADA2，**必须使用原始 paired reads**（或者至少是去除低质量 reads 后仍保持配对的 fastq）。
+
+    DADA2 自身会做去噪和 dereplication，无需提前用 vsearch 单端去重，否则就破坏配对。
+
+✅ 正确做法：
+
+-   保留 **trim 后的 paired-end fastq**（R1/R2）
+
+    **不要**对单端做任何去重
+
+    直接用 DADA2 的 `filterAndTrim()`、`dada()`、`mergePairs()` 等流程处理
+
+这样可以保证：
+
+-   配对信息完整
+
+    去噪和去重科学可靠
+
+    后续生成的 ASV 表是可信的

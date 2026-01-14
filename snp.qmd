@@ -1,0 +1,223 @@
+## 💻 R Code for Task 1: Manhattan Plot
+
+### 1. 📦 Install and Load Libraries
+
+You'll need the `qqman` package for plotting and a function to read your `.tsv` file, such as `read.delim()` or `read_tsv()` from the `readr` package.
+
+```{r}
+# Install the qqman package if you haven't already
+install.packages("qqman")
+
+# Load the required libraries
+library(qqman)
+# You might also need the readr package for efficient TSV reading
+# library(readr)
+```
+
+### 2. 📁 Load GWAS Summary Statistics Data
+
+Your file is a TSV, so you can use `read.delim()` and specify the tab separator `"\t"`.
+
+```{r}
+# Define the path to your downloaded file
+file_path <- "E:/acode/homwwork/data/gwas-association-downloaded_2025-11-02-MONDO_0008903-withChildTraits.tsv"
+
+# Load the data. Use read.delim for TSV, or read_tsv from readr
+# Setting stringsAsFactors = FALSE is often good practice
+data <- read.delim(file_path, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+
+
+# 3. CRITICAL: Print the column names to see the *actual* R variable names
+colnames(data)
+# (Optional) Check the first few rows and structure
+head(data)
+str(data)
+```
+
+### 3. 🧹 Data Preparation for `manhattan()`
+
+The `manhattan()` function requires specific column names: **SNP**, **CHR**, **BP**, and **P**. You will need to map and possibly clean the columns from your downloaded file:
+
+|  |  |  |  |
+|------------------|------------------|------------------|------------------|
+| **manhattan() Argument** | **Required Value** | **Your File's Column Name** | **Notes** |
+| `snp` | SNP identifier | `SNPS` or `STRONGEST_SNP-RISK_ALLELE` | `SNPS` is a common choice for the ID. |
+| `chr` | Chromosome ID | `CHR_ID` | Must be numeric (or X, Y, MT). |
+| `bp` | Base pair position | `CHR_POS` | Must be numeric. |
+| `p` | $P$-value | `P-VALUE` | Must be numeric. |
+
+You need to perform type conversion and potentially renaming:
+
+```{r}
+# Create a data frame for qqman, selecting and renaming columns
+gwas_data <- data.frame(
+  # Use the dot-separated name confirmed in Step 1
+  SNP = data$STRONGEST.SNP.RISK.ALLELE,
+  
+  # CHR_ID and CHR_POS are usually read correctly
+  CHR = as.numeric(gsub("chr", "", data$CHR_ID)), 
+  BP = as.numeric(data$CHR_POS),
+  
+  # Use the dot-separated name confirmed in Step 1
+  P = as.numeric(data$P.VALUE)
+)
+
+# Remove rows with NA (missing) or invalid values, which can occur after conversion
+gwas_data <- na.omit(gwas_data)
+gwas_data <- gwas_data[is.finite(gwas_data$P) & is.finite(gwas_data$CHR) & is.finite(gwas_data$BP), ]
+
+# Check the first few rows of the prepared data
+head(gwas_data)
+```
+
+### 4. 🎨 Generate the Manhattan Plot
+
+Use the cleaned data frame in the `manhattan()` function, similar to the script in your slides.
+
+```{r}
+# Ensure you have already run the corrected data cleaning steps:
+# gwas_data <- data.frame(
+#   SNP = data$STRONGEST.SNP.RISK.ALLELE,
+#   CHR = as.numeric(gsub("chr", "", data$CHR_ID)), # This line is critical for the X-axis
+#   BP = as.numeric(data$CHR_POS),
+#   P = as.numeric(data$P.VALUE)
+# )
+# gwas_data <- na.omit(gwas_data)
+# gwas_data <- gwas_data[is.finite(gwas_data$P) & is.finite(gwas_data$CHR) & is.finite(gwas_data$BP), ]
+
+
+# Generate the Manhattan Plot (no change needed to the function call itself)
+manhattan(gwas_data,
+          chr = "CHR",
+          bp = "BP",
+          p = "P",
+          snp = "SNP",
+          main = "Manhattan Plot of GWAS Results", # Chart title
+          ylim = c(0, 10), # Adjust y-axis limit (-log10(P)) as needed
+          col = c("blue", "orange"), # Alternating chromosome colors
+          suggestiveline = -log10(1e-5), # Suggestive significance line
+          genomewideline = -log10(5e-8)  # Genome-wide significance line
+)
+```
+
+![](plot-116.png)
+
+## Phase 1: Prepare the SNP List in R (Using Your gnomAD Data)
+
+This phase uses your gnomAD CSV file to extract a clean list of SNP identifiers (`rsIDs`) for the region of interest.
+
+### Step 1.1: Load the gnomAD Data
+
+```{r}
+# 1. Install and load necessary R packages
+# install.packages("readr")
+library(readr)
+library(dplyr)
+
+# 2. Define the path and load your gnomAD CSV file
+# NOTE: Replace "gnomad_data.csv" with your actual file name
+gnomad_data <- read_csv("E:/acode/homwwork/data/gnomAD_v4.1.0_ENSG00000242110_2025_10_20_16_17_02.csv")
+
+# (Optional) Check column names and structure
+colnames(gnomad_data)
+head(gnomad_data)
+```
+
+### Step 1.2: Filter and Extract rsIDs
+
+Since you are looking for LD between known SNPs, you should filter for variants that have an assigned `rsID`.
+
+```{r}
+# 3. Filter for variants that have a valid rsID
+# The rsIDs column is often empty or NA for some gnomAD variants
+snp_list_df <- gnomad_data %>%
+  # Filter out rows where rsIDs is missing, empty, or a known placeholder
+  filter(!is.na(rsIDs) & rsIDs != "") %>%
+  # Select only the rsID column
+  select(rsIDs) %>%
+  # Remove duplicate rsIDs if they exist
+  distinct()
+
+# 4. Convert the dataframe column to a simple list of SNP IDs
+target_snps <- snp_list_df$rsIDs
+
+# 5. Review the final list (e.g., the first 20 SNPs)
+print(paste("Number of SNPs for LD analysis:", length(target_snps)))
+print(head(target_snps, 20))
+```
+
+### Step 1.3: Save the SNP List
+
+Save this list as a plain text file. This file will be the input for the external LD tool.
+
+```{r}
+# 6. Save the list of SNPs to a text file (one SNP per line)
+writeLines(target_snps, "target_snps_for_LD.txt")
+```
+
+## Phase 2: Obtain the LD Matrix ($R$ Matrix) using an External Tool
+
+Since R cannot calculate LD without large, raw genotype files, you must use a specialized external tool to calculate the correlation matrix ($\mathbf{R}$) using a reference panel (like the 1000 Genomes Project).
+
+-   **Action:** **You must manually go to an LD tool website.**
+
+    -   **Recommended Tool:** **LDlink's LDmatrix** (which performs the function of the "LDmatrix Tool" shown in your slides).
+
+-   **Procedure:**
+
+    1.  **Navigate** to the LDlink LDmatrix website.
+
+    2.  **Upload/Paste:** Copy the contents of the `target_snps_for_LD.txt` file (your rsID list) and paste it into the query box.
+
+    3.  **Select Population:** Choose the desired **1000 Genomes population** (e.g., **EUR** for European) to match your GWAS cohort.
+
+    4.  **Select Statistic:** Choose $R^2$ as the LD measure.
+
+    5.  **Submit:** Run the job and wait for the result.
+
+    6.  **Download:** **Download the resulting** $R^2$ matrix as a text file (e.g., `LD_R2_matrix.txt`).
+
+This downloaded file is the $\mathbf{R}$ matrix you need to complete both Task 2 and Task 3.
+
+## Phase 3: Visualize the LD Matrix in R (Task 2 Completion)
+
+The downloaded $R$ matrix is usually a square matrix of numbers. You can load this back into R to create the required **LD heatmap visualization** shown in your slides.
+
+### Step 3.1: Load the LD Matrix
+
+```{r}
+# 1. Load the downloaded LD matrix file
+# The file structure depends on the external tool, but it's usually tab-separated.
+# NOTE: Replace "LD_R2_matrix.txt" with your downloaded file name
+R_matrix <- read.delim("LD_R2_matrix.txt", header = TRUE, row.names = 1)
+
+# Ensure the loaded data is a matrix of numeric values
+R_matrix <- as.matrix(R_matrix)
+R_matrix[1:5, 1:5] # View the top-left corner of the matrix 
+```
+
+### Step 3.2: Create the LD Heatmap
+
+You can use the built-in R function `heatmap()` or specialized packages like `pheatmap` or `ggplot2` to generate the visualization similar to the one in your presentation.
+
+```{r}
+# 2. Generate the LD Heatmap
+# Note: For simplicity, we use the base R 'heatmap' function, which creates clusters.
+# Specialized plotting (like the specific one in your slide) might require 'ggplot2' or 'pheatmap'.
+
+# Set color palette: from white (R2=0) to red (R2=1)
+colors <- colorRampPalette(c("white", "red"))(100)
+
+# Generate the heatmap
+heatmap(R_matrix,
+        symm = TRUE, # Matrix is symmetric
+        col = colors,
+        main = paste("LD (R2) Heatmap for Gene SNPs"),
+        xlab = "SNP ID",
+        ylab = "SNP ID",
+        # Suppress clustering for a clean, genomic order look (optional)
+        Rowv = NA,
+        Colv = NA)
+```
+
+This final step completes **Task 2**, as you have now calculated (via external tool) and visualized (via R) the Linkage Disequilibrium among the SNPs of your interested gene.

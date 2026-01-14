@@ -1,0 +1,1916 @@
+---
+title: 生存分析
+authors:
+  - name: jayz
+    affiliation: The University of myself
+    roles: writing
+    corresponding: true
+bibliography: references.bib
+---
+
+# Getting the data🤷
+
+Now we pick the data from TCGA, this is the [link](https://portal.gdc.cancer.gov/projects/TCGA-LUSC)
+
+**Project  项目**
+
+## **TCGA-LUSC**
+
+Total of  总计
+
+**504**Cases  案例
+
+**32,329**Files  文件
+
+[**3,770**](https://portal.gdc.cancer.gov/projects/TCGA-LUSC#annotations)Annotations  注释
+
+## **Summary  概括**
+
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Project ID  项目 ID**                   | TCGA-LUSC                                                                                   |
++===========================================+=============================================================================================+
+| **dbGaP Study Accession  dbGaP 研究加入** | [phs000178](https://www.ncbi.nlm.nih.gov/projects/gap/cgi-bin/study.cgi?study_id=phs000178) |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Project Name  项目名称**                | Lung Squamous Cell Carcinoma\                                                               |
+|                                           | 肺鳞状细胞癌                                                                                |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Disease Type  疾病类型**                | -   2 Disease Types  2种疾病类型                                                            |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Primary Site  主站点**                  | Bronchus and lung  支气管和肺                                                               |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Program  程序**                         | TCGA                                                                                        |
++-------------------------------------------+---------------------------------------------------------------------------------------------+
+
+## What is TCGA-LUSC?
+
+**TCGA-LUSC** refers to the data collection for **Lung Squamous Cell Carcinoma (LUSC)** within **The Cancer Genome Atlas (TCGA)** program.
+
+-   **Lung Squamous Cell Carcinoma (LUSC):** This is the **second most common subtype** of non-small cell lung cancer (NSCLC), typically arising in the central part of the lungs. It is ***strongly associated with smoking*** and generally has a ***poorer prognosis*** than lung adenocarcinoma (LUAD), the other major NSCLC subtype.
+
+-   **The Cancer Genome Atlas (TCGA):** This was a landmark project that systematically characterized the molecular changes (genomic, epigenomic, and transcriptomic) across over 30 different cancer types, including LUSC.
+
+In short, the **TCGA-LUSC dataset** is a vast public resource containing paired clinical data (survival time, stage, treatment) and high-quality molecular data (RNA-seq, mutation, copy number, etc.) for hundreds of LUSC patients.
+
+this TCGA-LUSC dataset is highly suitable for the kinds of projects you’re planning. Here's why it aligns well with survival analysis, DEG identification, and machine learning:
+
+### ✅ Why TCGA-LUSC Is a Strong Fit
+
+#### 1. **Comprehensive Clinical and Survival Data**
+
+-   504 cases with full clinical annotations.
+
+-   Includes survival time, vital status, and other metadata needed for Kaplan-Meier and Cox regression models.
+
+#### 2. **Rich Transcriptomic Data**
+
+-   RNA-Seq data available for 501 cases (99.4%), ideal for DEG analysis.
+
+-   miRNA-Seq and expression arrays also available for cross-validation or multi-omics integration.
+
+#### 3. **Mutation and Methylation Profiles**
+
+-   SNVs (10,264 files) and methylation arrays (503 cases) allow you to explore mutation-driven expression changes or epigenetic regulation.
+
+#### 4. **Machine Learning Potential**
+
+-   Large sample size with diverse data types (RNA, DNA, protein, clinical).
+
+-   Enables feature engineering across omics layers for predictive modeling (e.g., survival, subtype classification).
+
+#### 5. **Multi-Strategy Experimental Data**
+
+-   Includes WXS, WGS, RPPA, and ATAC-Seq—great for integrative analysis or dimensionality reduction.
+
+### 🔧 Suggested Project Directions
+
+| Project Type       | Feasibility with TCGA-LUSC           |
+|--------------------|--------------------------------------|
+| Survival Analysis  | ✅ Full clinical data available      |
+| DEG Identification | ✅ RNA-Seq + Expression Array        |
+| ML Prediction      | ✅ Diverse features for modeling     |
+| Immune Profiling   | ✅ RNA-Seq + CIBERSORT possible      |
+| Mutation Impact    | ✅ SNV + RNA-Seq integration         |
+| Multi-Omics        | ✅ Methylation, Proteomics, Genomics |
+
+### 🧰 Step-by-Step: Getting TCGA-LUSC Data via R
+
+#### 1. **Install and Load TCGAbiolinks**
+
+```{r}
+#| echo: true    
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("TCGAbiolinks")
+
+library(TCGAbiolinks)
+```
+
+### 🗂️ Step 2: Set Your Working Directory
+
+You want to save the data to `E:\acode\wsl\data`. In WSL, this path is usually mounted under `/mnt/e/acode/wsl/data`. So in R, set your working directory like this:
+
+```{r}
+setwd("E:/acode/wsl/data2") 
+```
+
+You can confirm it's working by checking:
+
+```{r}
+getwd() 
+list.files() 
+```
+
+### 📥 Step 3: Query and Download TCGA-LUSC RNA-Seq Data
+
+```{r}
+query <- GDCquery(
+    project = "TCGA-LUSC",
+    data.category = "Transcriptome Profiling",
+    data.type = "Gene Expression Quantification",
+    workflow.type = "STAR - Counts"
+)
+
+GDCdownload(query)  # This will download to your working directory
+data <- GDCprepare(query)
+```
+
+``` r
+--------------------------------------
+o GDCquery: Searching in GDC database
+--------------------------------------
+Genome of reference: hg38
+--------------------------------------------
+oo Accessing GDC. This might take a while...
+--------------------------------------------
+ooo Project: TCGA-LUSC
+--------------------
+oo Filtering results
+--------------------
+ooo By data.type
+ooo By workflow.type
+----------------
+oo Checking data
+----------------
+ooo Checking if there are duplicated cases
+ooo Checking if there are results for the query
+-------------------
+o Preparing output
+-------------------
+Downloading data for project TCGA-LUSC
+GDCdownload will download 562 files. A total of 2.384478377 GB
+The total size of files is big. We will download files in chunks
+Downloading chunk 1 of 3 (235 files, size = 996.984461 MB) as Tue_Sep_30_10_43_26_2025_0.tar.gz
+Downloading: 250 MB     Downloading chunk 2 of 3 (235 files, size = 997.197308 MB) as Tue_Sep_30_10_43_26_2025_1.tar.gz
+  |=======================================================================| 100%
+tar.exe: Error opening archive: Unrecognized archive format
+Download completed
+At least one of the chunks download was not correct. We will retry
+Of the 562 files for download 235 already exist.
+We will download only those that are missing ones.
+Downloading chunk 1 of 2 (235 files, size = 997.197308 MB) as Tue_Sep_30_10_43_26_2025_0.tar.gz
+Downloading: 250 MB     Downloading chunk 2 of 2 (92 files, size = 390.296608 MB) as Tue_Sep_30_10_43_26_2025_1.tar.gz
+|=====================================================|100%                      Completed after 18 s 
+```
+
+### 📦 What You Currently Have
+
+You're looking at files like:
+
+-   `*.tsv` with columns:
+
+    -   `gene_id`, `gene_name`, `gene_type`
+
+    -   `unstranded`, `strand_first`, `strand_second`
+
+    -   `tpm_unstranded`
+
+These are **per-sample quantification files**, typically from the **STAR workflow**, and they contain raw and normalized expression values.
+
+### 🛠️ Next Step: Get Clinical Data
+
+Run this in R to get survival info: r
+
+```{r}
+# Define the query parameters for Clinical data
+query.clin <- GDCquery(
+  project = "TCGA-LUSC",
+  data.category = "Clinical",
+  data.type = "Clinical Supplement",
+  data.format = "BCR XML" # XML is a common clinical format for legacy data
+)
+```
+
+```{r}
+query.clin <- GDCquery(
+  project = "TCGA-LUSC",
+  data.category = "Clinical",
+  data.type = "Clinical Supplement",
+  data.format = "BCR Biotab",
+  
+)
+
+GDCdownload(query.clin)
+clin.data <- GDCprepare(query.clin)
+
+```
+
+```{r}
+# Download the Clinical data
+GDCdownload(query.clin)
+```
+
+``` r
+--------------------------------------
+o GDCquery: Searching in GDC database
+--------------------------------------
+Genome of reference: hg38
+--------------------------------------------
+oo Accessing GDC. This might take a while...
+--------------------------------------------
+ooo Project: TCGA-LUSC
+--------------------
+oo Filtering results
+--------------------
+ooo By data.format
+ooo By data.type
+----------------
+oo Checking data
+----------------
+ooo Checking if there are duplicated cases
+ooo Checking if there are results for the query
+-------------------
+o Preparing output
+-------------------
+> # Download the Clinical data
++ GDCdownload(query.clin)
+Downloading data for project TCGA-LUSC
+GDCdownload will download 504 files. A total of 20.395574 MB
+Downloading as: Tue_Sep_30_11_22_25_2025.tar.gz
+Downloading: 1.9 MB  
+```
+
+Then we’ll match it to your expression data using patient barcodes (first 12 characters of sample ID). Once merged, you’ll be ready to:
+
+-   Normalize and filter expression
+
+-   Identify DEGs
+
+-   Run survival models (Kaplan-Meier, Cox)
+
+-   Build ML classifiers
+
+We now have:
+
+#### 1. **Clinical Data (**`clinical`**)**
+
+-   Contains patient metadata: age, gender, vital status, days to death, days to last follow-up, etc.
+
+-   Essential for survival analysis.
+
+#### 2. **RNA-Seq Expression Data (**`data`**)**
+
+-   A `SummarizedExperiment` object with:
+
+    -   Gene expression counts (STAR workflow)
+
+    -   Sample metadata (barcodes, sample type)
+
+    -   Gene annotations
+
+------------------------------------------------------------------------
+
+## Download proprotion
+
+it looks like we’ve downloaded a portion of the dataset—specifically the **biospecimen** and **clinical** components. That’s a great start, but it’s not yet the “whole” data needed for full analysis.
+
+### 🧬 What You Have
+
+-   **Biospecimen data**: Includes sample metadata like tissue source, preservation method, and aliquot IDs.
+
+-   **Clinical data**: Contains patient-level information such as diagnosis, treatment, survival time, and vital status.
+
+We've downloaded the biospecimen and clinical data folders and they contain `.tsv` files, you're ready to inspect and parse them. These files are part of the **TCGA Biotab format**, and they hold structured patient and sample metadata. Let’s walk through how to check and load them in R.
+
+### 🗂️ Step 1: Set Your Working Directory
+
+Make sure R is pointed to your data folder:
+
+```{r}
+setwd("E:/acode/wsl/data") 
+```
+
+### 📥 Step 2: List and Inspect the Files
+
+You can list the files in each folder to see what’s available:
+
+```{r}
+list.files("E:/acode/wsl/data/biospecimen.project-tcga-lusc.2025-09-30") 
+list.files("E:/acode/wsl/data/clinical.project-tcga-lusc.2025-09-30") 
+```
+
+Look for files like:
+
+-   `biospecimen_sample_lusc.txt`
+
+-   `clinical_patient_lusc.txt`
+
+-   `clinical_follow_up_v1.0_lusc.txt`
+
+### 📊 Step 3: Load a File and Preview It
+
+Let’s read one of the clinical files:
+
+```{r}
+library(readr)
+
+clinical_path <- "E:/acode/wsl/data/clinical.project-tcga-lusc.2025-09-30/clinical.tsv"
+clinical_data <- read_tsv(clinical_path)
+
+head(clinical_data)
+
+```
+
+You should see columns like:
+
+-   `bcr_patient_barcode`
+
+-   `vital_status`
+
+-   `days_to_death`
+
+-   `days_to_last_follow_up`
+
+These are key for survival analysis.
+
+check
+
+```{r}
+print(colnames(clinical_data))
+```
+
+And we know that so many feature just with "***'--***",and just no value,we do not need it
+
+```{r}
+# 去掉整列都是 "--" 的列
+clinical_filtered <- clinical_data[, colSums(clinical_data == "'--") < nrow(clinical_data)]
+print(colnames(clinical_filtered))
+```
+
+``` r
+print(colnames(clinical_filtered))
+ [1] "project.project_id"                             "cases.case_id"                                 
+ [3] "cases.consent_type"                             "cases.days_to_consent"                         
+ [5] "cases.disease_type"                             "cases.index_date"                              
+ [7] "cases.lost_to_followup"                         "cases.primary_site"                            
+ [9] "cases.submitter_id"                             "demographic.age_at_index"                      
+[11] "demographic.age_is_obfuscated"                  "demographic.country_of_residence_at_enrollment"
+[13] "demographic.days_to_birth"                      "demographic.days_to_death"                     
+[15] "demographic.demographic_id"                     "demographic.ethnicity"                         
+[17] "demographic.gender"                             "demographic.race"                              
+[19] "demographic.submitter_id"                       "demographic.vital_status"                      
+[21] "demographic.year_of_birth"                      "diagnoses.age_at_diagnosis"                    
+[23] "diagnoses.ajcc_pathologic_m"                    "diagnoses.ajcc_pathologic_n"                   
+[25] "diagnoses.ajcc_pathologic_stage"                "diagnoses.ajcc_pathologic_t"                   
+[27] "diagnoses.ajcc_staging_system_edition"          "diagnoses.classification_of_tumor"             
+[29] "diagnoses.days_to_diagnosis"                    "diagnoses.days_to_last_follow_up"              
+[31] "diagnoses.diagnosis_id"                         "diagnoses.diagnosis_is_primary_disease"        
+[33] "diagnoses.icd_10_code"                          "diagnoses.last_known_disease_status"           
+[35] "diagnoses.laterality"                           "diagnoses.morphology"                          
+[37] "diagnoses.primary_diagnosis"                    "diagnoses.prior_malignancy"                    
+[39] "diagnoses.prior_treatment"                      "diagnoses.progression_or_recurrence"           
+[41] "diagnoses.residual_disease"                     "diagnoses.site_of_resection_or_biopsy"         
+[43] "diagnoses.sites_of_involvement"                 "diagnoses.submitter_id"                        
+[45] "diagnoses.synchronous_malignancy"               "diagnoses.tissue_or_organ_of_origin"           
+[47] "diagnoses.tumor_grade"                          "diagnoses.tumor_of_origin"                     
+[49] "diagnoses.year_of_diagnosis"                    "treatments.clinical_trial_indicator"           
+[51] "treatments.course_number"                       "treatments.days_to_treatment_end"              
+[53] "treatments.days_to_treatment_start"             "treatments.initial_disease_status"             
+[55] "treatments.number_of_cycles"                    "treatments.number_of_fractions"                
+[57] "treatments.prescribed_dose"                     "treatments.prescribed_dose_units"              
+[59] "treatments.route_of_administration"             "treatments.submitter_id"                       
+[61] "treatments.therapeutic_agents"                  "treatments.treatment_anatomic_sites"           
+[63] "treatments.treatment_dose"                      "treatments.treatment_dose_units"               
+[65] "treatments.treatment_id"                        "treatments.treatment_intent_type"              
+[67] "treatments.treatment_or_therapy"                "treatments.treatment_outcome"                  
+[69] "treatments.treatment_type"   
+```
+
+### ✅ Core Columns You Should Keep
+
+#### 🧬 Patient Identifiers
+
+-   `"cases.case_id"`
+
+-   `"cases.submitter_id"`
+
+-   `"demographic.demographic_id"`
+
+-   `"bcr_patient_barcode"` (if available separately)
+
+These help match clinical data to expression profiles.
+
+#### ⏳ Survival Analysis
+
+-   `"demographic.days_to_death"`
+
+-   `"diagnoses.days_to_last_follow_up"`
+
+-   `"demographic.vital_status"`
+
+Use these to compute:
+
+```{r}
+# Create survival time column
+clinical_filtered$time <- ifelse(
+  is.na(clinical_filtered$`demographic.days_to_death`),
+  clinical_filtered$`diagnoses.days_to_last_follow_up`,
+  clinical_filtered$`demographic.days_to_death`
+)
+
+# Create survival status column
+clinical_filtered$status <- ifelse(
+  clinical_filtered$`demographic.vital_status` == "Dead", 1, 0
+)
+
+```
+
+#### 👤 Demographic Covariates
+
+-   `"demographic.age_at_index"`
+
+-   `"demographic.gender"`
+
+-   `"demographic.race"` or `"demographic.ethnicity"`
+
+Useful for stratification or adjusting survival models.
+
+#### 🩺 Diagnosis Info
+
+-   `"diagnoses.primary_diagnosis"`
+
+-   `"diagnoses.age_at_diagnosis"`
+
+-   `"diagnoses.tumor_grade"`
+
+-   `"diagnoses.ajcc_pathologic_stage"`
+
+-   `"diagnoses.last_known_disease_status"`
+
+These are great for clinical subgroup analysis or machine learning features.
+
+#### 💊 Treatment Info (Optional but Valuable)
+
+-   `"treatments.treatment_type"`
+
+-   `"treatments.treatment_outcome"`
+
+-   `"treatments.days_to_treatment_start"`
+
+-   `"treatments.days_to_treatment_end"`
+
+-   `"treatments.therapeutic_agents"`
+
+-   `"treatments.number_of_cycles"`
+
+Useful if you're modeling treatment response or including therapy as a covariate.
+
+```{r}
+selected_cols <- c(
+  "cases.case_id",
+  "demographic.age_at_index",
+  "demographic.gender",
+  "demographic.race",
+  "demographic.days_to_death",
+  "diagnoses.days_to_last_follow_up",
+  "demographic.vital_status",
+  "diagnoses.ajcc_pathologic_stage",
+  "diagnoses.tumor_grade",
+  "diagnoses.primary_diagnosis",
+  "treatments.treatment_type",
+  "treatments.treatment_outcome",
+  "time",
+  "status"
+)
+
+clinical_selected <- clinical_filtered[, selected_cols]
+```
+
+keep the data TSV
+
+```{r}
+# 保存为 CSV 文件
+write.csv(
+  clinical_selected,
+  file = "E:/acode/wsl/data/clinical.project-tcga-lusc.2025-09-30/filtered.csv",
+  row.names = FALSE
+)
+```
+
+ok re read it and check
+
+```{r}
+library(readr)
+
+clinical_path <- "E:/acode/wsl/data2/clinical.project-tcga-lusc.2025-09-30/filtered.csv"
+clinical1_data <- read_csv(clinical_path)
+
+
+```
+
+### 🎯 Option 1: Kaplan-Meier Survival Analysis
+
+Let’s visualize survival differences across a clinical variable, like `diagnoses.ajcc_pathologic_stage`.
+
+time is str type we should cobvert at first
+
+```{r}
+clinical1_data$time <- as.numeric(clinical1_data$time)
+```
+
+```{r}
+library(survival)
+library(survminer)
+
+# Build survival object
+surv_obj <- Surv(time = clinical1_data$time, event = clinical1_data$status)
+
+# Fit Kaplan-Meier model
+km_fit <- survfit(surv_obj ~ clinical1_data$diagnoses.ajcc_pathologic_stage)
+
+ggsurvplot(km_fit, data = clinical1_data,
+           pval = TRUE,
+           conf.int = FALSE,  # Disable ribbon to avoid draw_group error
+           risk.table = TRUE,
+           xlab = "Days", ylab = "Survival Probability",
+           title = "Survival by AJCC Pathologic Stage")
+
+```
+
+### 🧪 Suggested Final Selection
+
+Here’s a compact list you can extract:
+
+### 🧬 Step 4: Load Biospecimen Data (Optional)
+
+```{r}
+biospecimen_file <- "E:/acode/wsl/data/biospecimen.project-tcga-lusc.2025-09-30/biospecimen_sample_lusc.txt" biospecimen_data <- read_tsv(biospecimen_file)  
+head(biospecimen_data) 
+```
+
+This gives you sample-level metadata like:
+
+-   `bcr_sample_barcode`
+
+-   `sample_type`
+
+-   `tissue_type`
+
+# Back whole data
+
+The XML file you're looking at—`nationwidechildrens.org_clinical.TCGA-33-AAS8.xml`—is a **clinical supplement file** for a specific TCGA-LUSC patient (`TCGA-33-AAS8`). It contains detailed patient-level metadata that complements the tabular `.tsv` files you’ve already been working with.
+
+### 🧬 What’s Inside This XML File
+
+This file includes rich clinical annotations such as:
+
+-   **Patient barcode and UUID**: `TCGA-33-AAS8`, `A57414A5-FCDB-47B5-B07E-EDC7DC460783`
+
+-   **Vital status**: `Dead`
+
+-   **Days to death**: `1114`
+
+-   **Age at diagnosis**: `59`
+
+-   **Gender**: `Female`
+
+-   **Race**: `Black or African American`
+
+-   **Ethnicity**: `Not Hispanic or Latino`
+
+-   **Tumor site**: `Lung`
+
+-   **Histological type**: `Lung Squamous Cell Carcinoma`
+
+-   **AJCC pathologic stage**: `Stage IA`
+
+-   **Pathologic TNM**: `T1`, `N0`, `MX`
+
+-   **Treatment outcome**: `Complete Remission/Response`
+
+-   **Smoking history**: 60 pack-years, started in 1971, stopped in 1991
+
+### ✅ Is This Data Useful?
+
+Yes—very much so. This XML file provides **patient-level granularity** that’s often missing or aggregated in `.tsv` files. You can use it to:
+
+-   Validate or enrich your clinical table (`clinical1_data`)
+
+-   Extract missing fields like `treatment_outcome`, `smoking history`, or `performance scores`
+
+-   Build patient-level features for machine learning or subgroup analysisUseful for filtering tumor vs. normal samples.
+
+![](images/屏幕截图_9-10-2025_14129_-2.jpeg)
+
+And let us check the data from GDCquery ,check one of these
+
+```{r}
+library(readr)
+biospecimendata <- read.delim(
+  "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Transcriptome_Profiling/Gene_Expression_Quantification/000b6b94-572d-4d06-a8f4-2e43829f83d4/e74f321c-217f-4bdc-ad17-f132501b5157.rna_seq.augmented_star_gene_counts.tsv",
+  header = TRUE,
+  sep = "\t",
+  stringsAsFactors = FALSE,
+  skip = 1
+)
+
+head(biospecimendata)
+
+head(biospecimendata)
+
+```
+
+we're spot on—this file represents **expression data for a single TCGA-LUSC sample**. Let's break it down and then talk about what features you’ll want for your project.
+
+### 🧬 What the Table Shows
+
+Each row is a **gene**, and each column is a **quantification method** for that gene in this one sample:
+
++----------------------+---------------------------------------------------------------------+
+| Column Name          | Description                                                         |
++======================+=====================================================================+
+| `gene_id`            | Ensembl gene ID (e.g., ENSG00000000003.15)                          |
++----------------------+---------------------------------------------------------------------+
+| `gene_name`          | Human-readable gene symbol (e.g., TSPAN6)                           |
++----------------------+---------------------------------------------------------------------+
+| `gene_type`          | Gene biotype (e.g., protein_coding, lincRNA)                        |
++----------------------+---------------------------------------------------------------------+
+| `unstranded`         | Raw read count (unstranded protocol)                                |
++----------------------+---------------------------------------------------------------------+
+| `stranded_first`     | Raw read count (first-strand protocol)                              |
++----------------------+---------------------------------------------------------------------+
+| `stranded_second`    | Raw read count (second-strand protocol)                             |
++----------------------+---------------------------------------------------------------------+
+| `tpm_unstranded`     | Normalized expression in TPM                                        |
++----------------------+---------------------------------------------------------------------+
+| `fpkm_unstranded`    | Normalized expression in FPKM                                       |
++----------------------+---------------------------------------------------------------------+
+| `fpkm_uq_unstranded` | Upper-quartile normalized FPKM (used in TCGA open-access workflows) |
++----------------------+---------------------------------------------------------------------+
+
+The first few rows (`N_unmapped`, `N_multimapping`, etc.) are **technical summary rows**, not actual genes. You can safely exclude them.
+
+### ✅ Confirmed: This Is One Sample
+
+Yes—this `.tsv` file contains expression data for **just one patient/sample**. The filename and folder structure (with UUIDs) confirm that it’s a single file from GDCquery or manual download.
+
+To build a full expression matrix, you’ll need to:
+
+-   Download multiple `.tsv` files (one per sample)
+
+-   Extract the same columns (e.g., `fpkm_uq_unstranded`)
+
+-   Merge them into a gene × sample matrix
+
+### 🔍 What Features You Need for Your Project
+
+Based on your goals (survival analysis, DEG, machine learning), here’s what matters:
+
+#### 1. **Expression Features**
+
+-   Use `fpkm_uq_unstranded` or `tpm_unstranded` for normalized values
+
+-   Filter out low-expression genes (e.g., TPM \< 1 in most samples)
+
+-   Optionally log-transform: `log2(TPM + 1)`
+
+#### 2. **Clinical Metadata**
+
+From your `clinical1_data`, key features include:
+
+-   `time`, `status` (for survival)
+
+-   `age_at_index`, `gender`, `tumor_stage` (covariates)
+
+-   `treatment_type`, `treatment_outcome` (optional stratifiers)
+
+#### 3. **Sample Matching**
+
+-   Match expression files to clinical data via `bcr_patient_barcode`
+
+-   Use `sample.tsv` or `aliquot.tsv` to confirm tumor sample type
+
+```{r}
+library(xml2)
+library(dplyr)
+library(purrr)
+library(readr)
+
+# Function to parse one XML file
+parse_clinical_xml <- function(file) {
+  doc <- read_xml(file)
+  tibble(
+    case_id      = xml_text(xml_find_first(doc, "//shared:bcr_patient_barcode")),
+    vital_status = xml_text(xml_find_first(doc, "//clin_shared:vital_status")),
+    days_to_death = xml_text(xml_find_first(doc, "//clin_shared:days_to_death")),
+    days_to_last_followup = xml_text(xml_find_first(doc, "//clin_shared:days_to_last_followup")),
+    age_at_dx    = xml_text(xml_find_first(doc, "//clin_shared:age_at_initial_pathologic_diagnosis")),
+    stage        = xml_text(xml_find_first(doc, "//shared_stage:pathologic_stage"))
+  )
+}
+
+xml_files <- list.files(
+  path = "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Clinical/Clinical_Supplement",
+  pattern = "\\.xml$",         # Match .xml files only
+  recursive = TRUE,            # Search subfolders
+  full.names = TRUE            # Return full paths
+)
+
+
+clinical_df <- purrr::map_dfr(xml_files, parse_clinical_xml)
+
+
+# Now clean numeric columns
+clinical_df <- clinical_df %>%
+  mutate(
+    days_to_death = readr::parse_number(days_to_death),
+    days_to_last_followup = readr::parse_number(days_to_last_followup),
+    age_at_dx = readr::parse_number(age_at_dx)
+  )
+
+head(clinical_df)
+
+summary(clinical_df)
+
+```
+
+```{r}
+write.csv(
+  clinical_df,
+  file = "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Clinical/clinical_metadata.csv",
+  row.names = FALSE
+)
+```
+
+This will create a file called `clinical_metadata.csv` containing:
+
+-   `case_id`
+
+-   `vital_status`
+
+-   `days_to_death`
+
+-   `days_to_last_followup`
+
+-   `age_at_dx`
+
+-   `stage`
+
+## 🧩 Step 1: Collect All RNA `.tsv` Files
+
+```{r}
+library(readr)
+rna_files <- list.files(
+  path = "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Transcriptome_Profiling/Gene_Expression_Quantification",
+  pattern = "\\.tsv$", 
+  recursive = TRUE, 
+  full.names = TRUE
+)
+```
+
+## 🧩 Step 2: Read and Extract Expression Values
+
+The column names of your `final_data` are the **Folder UUIDs** (e.g., `000b6b94-...`), but the **File UUIDs** (e.g., `e74f321c-...`) are the true unique identifiers for the downloaded files that you need to map.
+
+When you ran: `sample_id <- basename(dirname(file))` → This extracts the **Folder UUID** (`000b6b94-...`).
+
+Your data structure is: `[Folder UUID] / [File UUID].rna_seq...tsv`
+
+The UUIDs in your `final_data` columns are the **Folder UUIDs**. To fix the mapping, you need to use a column from your `aliquot_df` that corresponds to the **Folder UUID** to replace it with the TCGA barcode.
+
+Since the **Folder UUID** (which is likely the Aliquot UUID) failed to match your `aliquot_df`, switching the sample ID extraction to the **File UUID** is the correct move.
+
+Since the direct overlap check failed, the simplest and most robust solution is to **re-process your expression data to use the Folder UUID as the Aliquot UUID** and then perform the mapping again, assuming your original `aliquot_df` truly contains the Aliquot UUIDs.
+
+We’ll extract `fpkm_uq_unstranded` for each gene in each sample:
+
+```{r}
+read_rna_file <- function(file) {
+  # Read the data, skipping the comment line
+  df <- read.delim(file, sep = "\t", header = TRUE, skip = 1, stringsAsFactors = FALSE)
+  
+  # Select the gene name and expression value columns
+  df <- df[, c("gene_id", "fpkm_uq_unstranded")]
+  
+  # --- CRITICAL CHANGE FOR SAMPLE ID EXTRACTION ---
+  
+  # 1. Get the filename (e.g., "e74f321c-217f-4bdc-ad17-f132501b5157.rna_seq.augmented_star_gene_counts.tsv")
+  file_name <- basename(file)
+  
+  # 2. Extract the File UUID (the part before the first dot)
+  # For file: 'e74f321c-217f-4bdc-ad17-f132501b5157.rna_seq.augmented_star_gene_counts.tsv'
+  # The pattern captures everything before the first literal dot (\\.)
+  sample_id <- sub("^([^\\.]+)\\..*$", "\\1", file_name)
+  
+  # Use the extracted File UUID as the column header
+  colnames(df)[2] <- sample_id
+  
+  return(df)
+}
+
+# Re-run the data loading process:
+rna_list <- lapply(rna_files, read_rna_file)
+# final_data <- rna_list %>% purrr::reduce(full_join, by = "gene_name")
+```
+
+## 🧩 Step 3: Merge All Samples into One Matrix
+
+```{r}
+rna_merged <- Reduce(function(x, y) merge(x, y, by = "gene_id"), rna_list)
+```
+
+## 🧩 Step 4: Save the Matrix
+
+```{r}
+write.csv(rna_merged, "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/expression_matrix2.csv", row.names = FALSE)
+```
+
+check
+
+```{r}
+head(rna_merged)
+```
+
+change the gene_id to gene_name
+
+```{r}
+# ----------------------------------------------------
+# 1. Install and Load Necessary Package
+# ----------------------------------------------------
+# If you don't have the tidyverse installed, run:
+# install.packages("tidyverse")
+
+library(tidyverse)
+# Using 'readr' and 'dplyr' from the tidyverse for efficient data handling.
+
+# ----------------------------------------------------
+# 2. Define File Paths (USE DOUBLE BACKSLASHES OR FORWARD SLASHES IN R!)
+# ----------------------------------------------------
+
+# Note: R often handles forward slashes (/) better, even on Windows.
+EXPRESSION_MATRIX_PATH <- "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/expression_matrix2.csv"
+ID_NAME_MAPPING_PATH <- "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Transcriptome_Profiling/Gene_Expression_Quantification/000b6b94-572d-4d06-a8f4-2e43829f83d4/e74f321c-217f-4bdc-ad17-f132501b5157.rna_seq.augmented_star_gene_counts.tsv"
+OUTPUT_PATH <- "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Transcriptome_Profiling/expression_matrix_with_names2.csv"
+
+# ----------------------------------------------------
+# 3. Load Data
+# ----------------------------------------------------
+
+# Read the main expression matrix (CSV)
+tryCatch({
+  expression_data <- read_csv(EXPRESSION_MATRIX_PATH)
+  cat("Loaded expression data:", nrow(expression_data), "rows.\n")
+}, error = function(e) {
+  stop("Error reading expression_matrix.csv: ", conditionMessage(e))
+})
+```
+
+```{r}
+# Read the ID-Name mapping file (TSV - Tab Separated Values)
+tryCatch({
+  # The TSV file likely has 'gene_id' and 'gene_name' as its first two columns
+  mapping_data <- read_tsv(ID_NAME_MAPPING_PATH,skip = 1) %>%
+    # Select only the columns needed and rename them for clarity
+    select(gene_id = 1, gene_name = 2) %>%
+    # Remove duplicates just in case
+    distinct(gene_id, .keep_all = TRUE)
+  
+  cat("Loaded mapping data:", nrow(mapping_data), "unique gene IDs.\n")
+}, error = function(e) {
+  stop("Error reading mapping TSV file: ", conditionMessage(e))
+})
+```
+
+```{r}
+
+
+cat("Prepared mapping data with", nrow(mapping_data), "unique gene IDs.\n")
+
+# --- 2. Perform Left Join (Merge) Directly on 'gene_id' ---
+# The 'by' argument is simply "gene_id" because the columns now match exactly.
+merged_data <- expression_data %>%
+  left_join(mapping_data, by = "gene_id")
+
+cat("Merged data frame created with", nrow(merged_data), "rows.\n")
+
+# --- 3. Final Clean-up and Save ---
+
+final_data <- merged_data %>%
+  # Create the final identifier: use gene_name if available, otherwise keep original gene_id
+  # This handles any gene IDs that weren't found in the mapping file.
+  mutate(final_identifier = coalesce(gene_name, gene_id)) %>%
+  
+  # Drop the original 'gene_id' column and the temporary 'gene_name' column
+  select(-gene_id, -gene_name) %>%
+  
+  # Set the new identifiers as the first column, and rename it to 'gene_name'
+  select(gene_name = final_identifier, everything())
+  
+# Display the first few rows of the result
+cat("\n--- Result Head ---\n")
+print(head(final_data))
+```
+
+save
+
+```{r}
+# Save the final data frame to a new CSV file
+write_csv(final_data, OUTPUT_PATH) # Uncomment to save
+cat(paste0("\nSuccessfully created the new expression matrix. (Saving to OUTPUT_PATH)\n"))
+
+```
+
+```{r}
+colnames(final_data)
+```
+
+## 🧩 Step-by-Step: Map UUIDs to TCGA Barcodes
+
+### ✅ 1. Load `aliquot.tsv`
+
+```{r}
+library(readr)
+
+aliquot_path <- "E:/acode/wsl/data2/biospecimen.project-tcga-lusc.2025-09-30/aliquot.tsv"
+aliquot_df <- read.delim(aliquot_path, sep = "\t", header = TRUE, skip = 0, stringsAsFactors = FALSE)
+```
+
+Check the key columns:
+
+```{r}
+colnames(aliquot_df) 
+```
+
+You should see something like:
+
+-   `aliquot_id` → UUID (matches RNA folder name)
+
+-   `cases.case_id` → UUID (internal GDC ID)
+
+-   `cases.submitter_id` → TCGA barcode (e.g., `TCGA-85-8048`)
+
+### ✅ 2. Build a Mapping Table
+
+```{r}
+# and ensure we only keep unique mappings (though distinct() was used previously).
+sample_name_map <- aliquot_df %>%
+  # Select the two columns
+  select(uuid = aliquots.aliquot_id, barcode = aliquots.submitter_id) %>%
+  # Ensure the UUIDs are unique in the map
+  distinct()
+```
+
+### ✅ 3. Rename Columns in Expression Matrix
+
+Assuming your expression matrix is called `rna_merged` and has UUIDs as column names:
+
+```{r}
+# Convert the two-column dataframe into a named vector (key-value pair)
+# This is the most efficient way to use a lookup table to rename columns in R.
+uuid_to_barcode_vector <- sample_name_map %>%
+  # Create a named vector where names are the UUIDs and values are the barcodes
+  pull(barcode, name = uuid)
+
+cat("Created a mapping vector with", length(uuid_to_barcode_vector), "unique sample IDs.\n")
+```
+
+```{r}
+# 2. Rename Columns in final_data
+# ----------------------------------------------------
+
+# Get the current column names of your expression matrix (excluding "gene_name")
+current_uuids <- colnames(final_data)
+data_columns_to_rename <- current_uuids[current_uuids != "gene_name"]
+
+# Use the mapping vector to find the new names
+# If a UUID is not found in the vector, the original UUID will be returned (since it's not mapped).
+new_barcodes <- uuid_to_barcode_vector[data_columns_to_rename]
+
+# Handle cases where the UUID wasn't found in the map (it returns NA)
+# Use coalesce to keep the original UUID if the barcode is NA
+new_barcodes <- coalesce(new_barcodes, data_columns_to_rename)
+
+
+# ----------------------------------------------------
+# 3. Apply the New Names
+# ----------------------------------------------------
+
+# Create a full list of new column names
+new_colnames <- c("gene_name", new_barcodes)
+
+# Apply the new names to the dataframe
+colnames(final_data) <- new_colnames
+
+cat("\nSample names successfully updated.\n")
+
+# Display the new column names
+cat("\n--- New Column Names ---\n")
+print(head(colnames(final_data)))
+
+# Display the head of the final dataframe
+cat("\n--- Final Data Head ---\n")
+print(head(final_data[, 1:5]))
+```
+
+Now your expression matrix will have columns like:
+
+| gene_id | TCGA-85-8048 | TCGA-56-8083 | ... |
+|---------|--------------|--------------|-----|
+
+------------------------------------------------------------------------
+
+## 1. Initial Data Inspection and Preparation (R)
+
+We'll use `readr` to load the CSV and `dplyr` to select the essential columns.
+
+```{r}
+# Assuming 'tidyverse' is already loaded
+library(tidyverse)
+# You may need to install the 'survival' and 'survminer' packages
+# install.packages(c("survival", "survminer"))
+library(survival)
+library(survminer)
+
+# --- Define File Path ---
+CLINICAL_DATA_PATH <- "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Clinical/clinical_metadata.csv"
+
+# --- Load Clinical Data ---
+tryCatch({
+  clinical_data <- read_csv(CLINICAL_DATA_PATH)
+  cat("Loaded Clinical Data with", nrow(clinical_data), "rows and", ncol(clinical_data), "columns.\n")
+}, error = function(e) {
+  stop("Error reading clinical_metadata.csv: ", conditionMessage(e))
+})
+```
+
+```{r}
+print(head(clinical_data))
+```
+
+## 1. Prepare Survival Status (Event)
+
+Survival analysis in R (using the `survival` package) requires the event status to be a numeric value, where 1 indicates the event occurred (Death) and 0 indicates the observation was censored (Alive).
+
+|  |  |  |
+|----|----|----|
+| Original `vital_status` | Numeric `event` | Meaning |
+| **Dead** | **1** | Event occurred (Death) |
+| **Alive** | **0** | Observation censored (Alive at last follow-up) |
+
+You can use the `case_when()` function from `dplyr` to perform this conversion:
+
+```{r}
+survival_prepared <- clinical_data %>%
+  mutate(
+    # Create the binary 'event' status
+    event = case_when(
+      vital_status == "Dead" ~ 1,
+      vital_status == "Alive" ~ 0,
+      TRUE ~ NA_real_ # Treat unexpected values as missing
+    ),
+    # Consolidate 'time' (as done previously)
+    time = coalesce(days_to_death, days_to_last_followup)
+  ) %>%
+  select(case_id, time, event) %>%
+  drop_na(time, event)
+```
+
+## 2. Simplify Pathologic Stage for LUSC
+
+For **Lung Squamous Cell Carcinoma (LUSC)**, the stages you listed (IA, IB, IIA, IIB, IIIA, IIIB) are based on the TNM system (Tumor, Node, Metastasis).
+
+In survival analysis, it's often best to combine these stages into **broader prognostic groups** to ensure each group has enough patients and to capture the major jumps in prognosis.
+
+### Clinical Interpretation and Grouping
+
+For solid tumors like LUSC, a standard way to simplify staging for survival analysis is:
+
++----------------------+--------------------------+--------------------------------------------------------------+
+| Simplified Group     | Included Original Stages | Clinical Meaning                                             |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Early Stage**      | **I (IA, IB)**           | Locally confined tumor, best prognosis.                      |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Locally Advanced** | **II (IIA, IIB)**        | Larger tumor or spread to nearby lymph nodes.                |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Advanced Stage**   | **III (IIIA, IIIB)**     | Tumor spread to distant lymph nodes or large primary tumors. |
++----------------------+--------------------------+--------------------------------------------------------------+
+| **Metastatic**       | **IV** (If present)      | Worst prognosis (although LUSC often presents earlier).      |
++----------------------+--------------------------+--------------------------------------------------------------+
+
+### R Code for Stage Simplification
+
+You can use string manipulation (`str_extract` and `case_when`) to extract and group the stages:
+
+```{r}
+stage_prepared <- clinical_data %>%
+  # 1. Extract the Roman numeral part (I, II, III, IV)
+  mutate(
+    roman_stage = str_extract(stage, "I+|V"), # Extracts I, II, III, IV
+    
+    # 2. Group the Roman numeral into simplified categories
+    simplified_stage = case_when(
+      is.na(roman_stage) ~ "Unknown",
+      # Grouping I and II together for better separation from III
+      roman_stage %in% c("I", "II") ~ "Early/Local (Stage I-II)",
+      roman_stage == "III" ~ "Advanced (Stage III)",
+      roman_stage == "IV" ~ "Metastatic (Stage IV)",
+      TRUE ~ "Other/Unknown"
+    )
+  ) %>%
+  select(case_id, simplified_stage)
+
+# Merge this with your survival_prepared data for downstream analysis
+survival_final <- survival_prepared %>%
+    left_join(stage_prepared, by = "case_id") %>%
+    drop_na(simplified_stage) # Only keep patients with a known stage
+
+# Check the distribution of the new groups
+cat("\n--- Distribution of Simplified Stages ---\n")
+print(survival_final %>% count(simplified_stage))
+```
+
+and we have
+
+``` r
+--- Distribution of Simplified Stages ---
+# A tibble: 3 × 2
+  simplified_stage             n
+  <chr>                    <int>
+1 Advanced (Stage III)        84
+2 Early/Local (Stage I-II)   405
+3 Unknown                      4
+```
+
+save
+
+```{r}
+write_csv(survival_final, "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/clinical_metadata.csv")
+write_csv(final_data, "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Transcriptome_Profiling/final_data.csv")
+```
+
+## 1. Final Data Preparation and Filtering
+
+First, ensure the data is filtered to remove the "Unknown" stage, and that the `simplified_stage` is treated as a factor.
+
+```{r}
+# ----------------------------------------------------
+# 1. Final Data Preparation
+# ----------------------------------------------------
+
+# Filter out unknown stages and convert stage to a factor
+survival_for_analysis <- survival_final %>%
+  filter(simplified_stage != "Unknown") %>%
+  mutate(simplified_stage = factor(simplified_stage, 
+                                   levels = c("Early/Local (Stage I-II)", "Advanced (Stage III)"))) # Set the order for plotting
+
+cat("Final count of patients for survival analysis:", nrow(survival_for_analysis), "\n")
+```
+
+## 2. Kaplan-Meier Curve and Log-Rank Test
+
+The Kaplan-Meier (KM) method calculates the survival probability over time, and the Log-Rank test statistically compares the survival curves of the two groups.
+
+```{r}
+# ----------------------------------------------------
+# 2. Kaplan-Meier and Log-Rank Test
+# ----------------------------------------------------
+
+# A. Create the Survival Object
+# Surv(time, event)
+surv_object <- Surv(time = survival_for_analysis$time, 
+                    event = survival_for_analysis$event)
+
+# B. Fit the Survival Model
+# Fit the KM curve based on the 'simplified_stage'
+km_fit_stage <- surv_fit(surv_object ~ simplified_stage, data = survival_for_analysis)
+
+# C. Print the Summary and Log-Rank Test P-value
+cat("\n--- Survival Model Summary (Log-Rank Test) ---\n")
+# The summary output contains the log-rank test p-value at the bottom
+print(survdiff(surv_object ~ simplified_stage, data = survival_for_analysis)) 
+
+# D. Generate and Display the KM Plot
+cat("\n--- Kaplan-Meier Survival Plot by Stage ---\n")
+
+# ggsurvplot is used to generate a high-quality survival plot
+km_plot <- ggsurvplot(
+  km_fit_stage,
+  data = survival_for_analysis,
+  title = "Overall Survival by Pathologic Stage in TCGA-LUSC",
+  # Aesthetics
+  conf.int = FALSE,           # Don't show confidence interval shading
+  pval = TRUE,                # Display the Log-Rank test p-value on the plot
+  risk.table = TRUE,          # Show the number-at-risk table below the plot
+  legend.title = "Stage Group",
+  legend.labs = c("Early/Local (I-II)", "Advanced (III)"), # Labels for the legend
+  palette = c("#00AFBB", "#E7B800"), # Choose distinct colors
+  ggtheme = theme_bw()        # Use a clean theme
+)
+
+# Print the plot
+print(km_plot)
+```
+
+``` r
+--- Survival Model Summary (Log-Rank Test) ---
+Call:
+survdiff(formula = surv_object ~ simplified_stage, data = survival_for_analysis)
+
+                                            N Observed Expected (O-E)^2/E (O-E)^2/V
+simplified_stage=Early/Local (Stage I-II) 405      119    127.2     0.528      2.96
+simplified_stage=Advanced (Stage III)      84       36     27.8     2.417      2.96
+
+ Chisq= 3  on 1 degrees of freedom, p= 0.09 
+ 
+```
+
+![](plot-9.png)
+
+## 3. Cox Proportional Hazards Model
+
+To quantify the risk associated with being in the Advanced Stage group, we use a Cox Proportional Hazards (Cox PH) model. The output will give you a **Hazard Ratio (HR)**.
+
+-   **HR \> 1:** Advanced Stage group has a higher risk of death.
+
+-   **HR \< 1:** Advanced Stage group has a lower risk of death (protective effect).
+
+```{r}
+# ----------------------------------------------------
+# 3. Cox Proportional Hazards Model
+# ----------------------------------------------------
+
+# Fit the Cox PH model
+cox_model <- coxph(surv_object ~ simplified_stage, data = survival_for_analysis)
+
+# Summarize the model
+cat("\n--- Cox Proportional Hazards Model Summary ---\n")
+cox_summary <- summary(cox_model)
+print(cox_summary)
+
+# Extract key Cox PH results
+hr <- round(cox_summary$conf.int[1], 2)
+lower_ci <- round(cox_summary$conf.int[3], 2)
+upper_ci <- round(cox_summary$conf.int[4], 2)
+p_val_cox <- format.pval(cox_summary$coefficients[5], digits = 3, eps = 1e-04)
+
+cat(paste0("\nResults:\n"))
+cat(paste0("  Hazard Ratio (Advanced vs. Early): ", hr, "\n"))
+cat(paste0("  95% CI: [", lower_ci, " - ", upper_ci, "]\n"))
+cat(paste0("  P-value (Cox PH): ", p_val_cox, "\n"))
+```
+
+``` r
+--- Cox Proportional Hazards Model Summary ---
+Call:
+coxph(formula = surv_object ~ simplified_stage, data = survival_for_analysis)
+
+  n= 489, number of events= 155 
+
+                                       coef exp(coef) se(coef)     z Pr(>|z|)  
+simplified_stageAdvanced (Stage III) 0.3272    1.3871   0.1909 1.714   0.0865 .
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+                                     exp(coef) exp(-coef) lower .95 upper .95
+simplified_stageAdvanced (Stage III)     1.387     0.7209    0.9542     2.017
+
+Concordance= 0.524  (se = 0.019 )
+Likelihood ratio test= 2.77  on 1 df,   p=0.1
+Wald test            = 2.94  on 1 df,   p=0.09
+Score (logrank) test = 2.97  on 1 df,   p=0.09
+
+
+Results:
+  Hazard Ratio (Advanced vs. Early): 1.39
+  95% CI: [0.95 - 2.02]
+  P-value (Cox PH): 0.0865
+```
+
+### Interpretation
+
+After running the above code, you will be able to conclude:
+
+1.  **Kaplan-Meier Plot:** Visually inspect if the survival curves separate, with the Advanced Stage curve dropping more quickly.
+
+2.  **Log-Rank P-value:** Determine if the difference in survival between the two stage groups is statistically significant (usually p\<0.05).
+
+3.  **Hazard Ratio (HR):** Quantify the increased risk of death for patients in the **Advanced (Stage III)** group compared to the **Early/Local (Stage I-II)** group.
+
+## 1. Log-Rank Test (Kaplan-Meier Comparison)
+
+The Log-Rank test compares the entire survival experience between the two groups:
+
++-----------------------------+-------------+----------------------------------------------------------------------------+
+| Metric                      | Value       | Interpretation                                                             |
++-----------------------------+-------------+----------------------------------------------------------------------------+
+| **Chi-square (**χ2)         | 3           | Measures the magnitude of difference between observed and expected deaths. |
++-----------------------------+-------------+----------------------------------------------------------------------------+
+| **Degrees of Freedom (df)** | 1           | The number of groups minus one (2−1=1).                                    |
++-----------------------------+-------------+----------------------------------------------------------------------------+
+| **P-value**                 | 0.09        | This value is greater than the conventional significance level of 0.05.    |
++-----------------------------+-------------+----------------------------------------------------------------------------+
+
+**Interpretation:** The difference in overall survival between the **Advanced (Stage III)** group and the **Early/Local (Stage I-II)** group is **not statistically significant** at the p\<0.05 level, but it is **suggestive of a trend** towards significance (p≈0.09). While the Advanced group has a higher observed number of events (deaths) than expected (36 observed vs. 27.8 expected), the difference isn't strong enough to definitively reject the null hypothesis of no difference in survival.
+
+## 2. Cox Proportional Hazards Model
+
+The Cox PH model quantifies the risk of death (Hazard Ratio) associated with being in the Advanced Stage group compared to the Early/Local Stage group.
+
++----------------------------------+---------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Metric                           | Value         | Interpretation                                                                                                                                                           |
++----------------------------------+---------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Hazard Ratio (HR)**            | 1.39          | Being in the Advanced Stage group increases the risk of death by 39% compared to the Early/Local Stage group.                                                            |
++----------------------------------+---------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **95% Confidence Interval (CI)** | \[0.95−2.02\] | This interval ranges from a 5% reduced risk (0.95) to a 102% increased risk (2.02). Crucially, the interval **crosses 1.0** (the null value for no effect).              |
++----------------------------------+---------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **P-value**                      | 0.0865        | This P-value, like the Log-Rank test, is slightly above the 0.05 threshold, confirming the result is **not statistically significant** but indicates a borderline trend. |
++----------------------------------+---------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+**Interpretation:**
+
+1.  **Risk:** The data suggests that patients in the Advanced Stage group face a 1.39 times higher hazard of death than those in the Early/Local Stage group.
+
+2.  **Significance:** Since the 95% CI contains the value 1.0 (the point of no effect), and the p-value is ≈0.09, this association is considered **borderline or suggestive** but not conventionally statistically significant.
+
+```{r}
+# Assuming 'final_data' (your expression matrix) and 'aliquot_df' are loaded,
+# and 'tidyverse' is attached.
+
+# ----------------------------------------------------
+# 1. Create the Mapping Table
+# ----------------------------------------------------
+# ----------------------------------------------------
+# 1. Re-Create the Mapping Table (Using Aliquot Barcode)
+# ----------------------------------------------------
+
+# We will try to map the Aliquot UUID to the *full* Aliquot Submitter ID 
+# (e.g., TCGA-85-7843-01A-11R-2125-07) to see if the map works.
+
+sample_map_aliquot_barcode <- aliquot_df %>%
+  select(
+    aliquot_uuid = `aliquots.aliquot_id`,   # The UUID from your final_data columns (MUST MATCH!)
+    aliquot_barcode = `aliquots.submitter_id` # The full TCGA barcode for the sample
+  ) %>%
+  distinct() %>%
+  filter(aliquot_uuid != "" & aliquot_barcode != "")
+
+cat("Re-created mapping with", nrow(sample_map_aliquot_barcode), "unique Aliquot UUID to Aliquot Barcode links.\n")
+
+# Convert to a named vector
+uuid_to_aliquot_barcode_vector <- sample_map_aliquot_barcode %>%
+  pull(aliquot_barcode, name = aliquot_uuid)
+
+# ----------------------------------------------------
+# 2. Rename Columns in final_data
+# ----------------------------------------------------
+
+current_colnames <- colnames(final_data)
+# Exclude the gene name column
+data_uuids_to_rename <- current_colnames[current_colnames != "gene_name"]
+
+# Lookup the new barcodes
+new_barcodes_matched <- uuid_to_aliquot_barcode_vector[data_uuids_to_rename]
+
+# Coalesce: If the lookup failed (returned NA), keep the original UUID.
+# The previous attempt failed because 'new_barcodes_matched' was all NA.
+new_column_names <- coalesce(new_barcodes_matched, data_uuids_to_rename)
+
+
+# ----------------------------------------------------
+# 3. Apply and Finalize
+# ----------------------------------------------------
+
+# Reconstruct the full column name vector
+final_colnames <- c(current_colnames[1], new_column_names)
+
+# Apply the new names
+colnames(final_data) <- final_colnames
+
+cat("\nSample names successfully updated.\n")
+
+# Display the new column names
+cat("\n--- New Column Names (Head) ---\n")
+print(head(colnames(final_data)))
+```
+
+```{r}
+colnames(final_data)
+print(aliquot_df$cases.case_id)
+```
+
+```{r}
+# ----------------------------------------------------
+# 1. Extract and Clean IDs
+# ----------------------------------------------------
+
+# Get the list of UUIDs from the expression matrix columns
+expression_uuids <- colnames(final_data)[-1] # Exclude 'gene_name'
+
+# Get the unique list of Aliquot UUIDs from the mapping file
+aliquot_uuids_map <- unique(aliquot_df$`aliquots.aliquot_id`)
+
+# ----------------------------------------------------
+# 2. Check for Overlap
+# ----------------------------------------------------
+
+# Find the number of UUIDs that are present in BOTH lists
+overlap_count <- sum(expression_uuids %in% aliquot_uuids_map)
+
+# Get the total number of samples you are trying to rename
+total_samples <- length(expression_uuids)
+
+cat(paste0("\nTotal expression samples (UUIDs): ", total_samples, "\n"))
+cat(paste0("Total unique Aliquot UUIDs in map: ", length(aliquot_uuids_map), "\n"))
+cat(paste0("Number of matching IDs (Overlap): ", overlap_count, "\n"))
+
+# ----------------------------------------------------
+# 3. Conclusion and Path Forward
+# ----------------------------------------------------
+
+if (overlap_count == total_samples && total_samples > 0) {
+    # This should not happen if the previous code failed. If it does, there's a coding error.
+    cat("\nERROR: All IDs match, but renaming failed. There is a bug in the renaming logic.\n")
+} else if (overlap_count == 0) {
+    cat("\nCRITICAL: ZERO OVERLAP. The column names are NOT Aliquot UUIDs.\n")
+    cat("Your columns are likely FILE UUIDs. The current mapping file (aliquot_df) cannot be used directly.\n")
+} else if (overlap_count < total_samples && overlap_count > 0) {
+    cat(paste0("\nPARTIAL OVERLAP (", overlap_count, " matched). Only some samples were renamed (the rest kept the UUID).\n"))
+    cat("This might be due to a mix of different UUID types in your final_data columns.\n")
+}
+```
+
+Since the direct mapping between your expression data column headers (File UUIDs) and the biospecimen metadata (`aliquot_df`) failed, the most reliable next step is to use the `TCGAbiolinks` package and the `GDCquery` function to download a cleaner, combined metadata table.
+
+The metadata acquired this way often contains the necessary links between **File ID** and **Aliquot Barcode** or at least provides a fresh, clean set of Aliquot IDs.
+
+Here are the steps to query and download the clinical and biospecimen metadata using `TCGAbiolinks`:
+
+------------------------------------------------------------------------
+
+# The true way to get the bridge
+
+## Step 1: Query and Download Metadata using TCGAbiolinks (R)
+
+This process queries the GDC for both the Clinical and Biospecimen metadata for the entire TCGA-LUSC project.
+
+```{r}
+setwd("E:/acode/wsl/data4")
+library(TCGAbiolinks)
+
+# 1. Query
+query <- GDCquery(
+  project = "TCGA-LUSC",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  workflow.type = "STAR - Counts"
+)
+
+# 2. Inspect UUID–barcode mapping
+bridge <- getResults(query)[, c("id", "cases", "file_name")]
+
+write.csv(bridge, file = "bridge_TCGA_LUSC_STAR_Counts.csv", row.names = FALSE)
+
+# 4. Clinical info
+clinical <- GDCquery_clinic("TCGA-LUSC", type = "clinical")
+
+# 5. Merge
+merged <- merge(bridge, clinical, by.x = "cases", by.y = "submitter_id")
+
+# 6. Ready for DEG or survival
+
+```
+
+download the meta file that link the barcode and UUID
+
+Perfect — you’ve spotted the key mismatch:
+
+🧠 **Your bridge file (`bridge`) has barcodes like**\
+`TCGA-56-7221-01A-11R-2045-07` ( *full barcode* )
+
+while\
+🧬 **Your clinical table uses barcodes like**\
+`TCGA-56-7221` ( *short “case-level” barcode* )
+
+## 🧩 Why this happens
+
+Each TCGA barcode encodes multiple levels of biological hierarchy:
+
++--------------------------------+-----------------------------------------------+
+| Example                        | Meaning                                       |
++================================+===============================================+
+| `TCGA-56-7221`                 | **Patient (case)**                            |
++--------------------------------+-----------------------------------------------+
+| `TCGA-56-7221-01A`             | **Sample (tumor)**                            |
++--------------------------------+-----------------------------------------------+
+| `TCGA-56-7221-01A-11R`         | **Portion/analyte info**                      |
++--------------------------------+-----------------------------------------------+
+| `TCGA-56-7221-01A-11R-2045-07` | **File-level ID** (unique per sequencing run) |
++--------------------------------+-----------------------------------------------+
+
+Your clinical data uses **case-level** IDs (12 characters),\
+but the RNA-seq bridge uses **file-level** IDs (\~28+ characters).
+
+## ✅ Solution: truncate the bridge’s barcode to case-level
+
+You can easily cut the first 12 characters from the RNA bridge’s `cases` column — that’s the TCGA case barcode.
+
+### 🔹 Step 1: Clean and merge
+
+```{r}
+bridge$case_id <- substr(bridge$cases, 1, 12) 
+head(bridge$case_id) 
+```
+
+Output will look like:
+
+```         
+[1] "TCGA-56-7221" "TCGA-43-7657" "TCGA-43-7657" "TCGA-60-2695" ...
+```
+
+load the data
+
+```{r}
+library(readr)
+final_data <- read_csv("E:/acode/wsl/data2/GDCdata/TCGA-LUSC/Transcriptome_Profiling/final_data.csv")
+```
+
+```{r}
+clinical_data <- read_csv("E:/acode/wsl/data2/GDCdata/TCGA-LUSC/clinical_metadata.csv")
+```
+
+```{r}
+print(clinical_data$case_id)
+```
+
+Excellent — you are exactly at the right step 👏
+
+You now have:
+
+-   `final_data`: your **gene expression matrix**, columns are **UUIDs** (e.g., `000b6b94-...`)
+
+    `bridge`: contains mapping between `id` (UUID) ↔ `cases` (full TCGA barcode)
+
+    `clinical_data`: contains **case-level barcodes** (12-character TCGA IDs)
+
+Your goal:\
+👉 rename `final_data` column names (UUIDs) into **TCGA barcodes** that match clinical samples (`clinical_data$case_id`).
+
+## ✅ Step-by-step solution
+
+### 🔹 Step 1. Create a mapping table between UUID and TCGA barcode
+
+```{r}
+# Extract the case-level barcode from bridge
+bridge$case_id <- substr(bridge$cases, 1, 12)
+
+# Select only the columns you need
+map_table <- bridge[, c("id", "case_id")]
+head(map_table)
+```
+
+Looks like this:
+
+``` r
+                                   id       case_id
+1 f95d3d81-2433-4018-a042-f24b9f04946a TCGA-56-7221
+2 4236170e-67b4-4bd7-badd-4fcba557d0e3 TCGA-43-7657
+...
+```
+
+### 🔹 Step 2. Rename your `final_data` columns using the map
+
+We’ll replace each column name (UUID) in `final_data` with its corresponding `case_id` if found.
+
+```{r}
+# Create a named vector: names = UUID, values = case_id
+uuid_to_case <- setNames(map_table$case_id, map_table$id)
+
+# Replace column names
+colnames(final_data) <- ifelse(
+  colnames(final_data) %in% names(uuid_to_case),
+  uuid_to_case[colnames(final_data)],
+  colnames(final_data)  # keep unchanged (e.g. "gene_name")
+)
+```
+
+### Step 3. Check the result
+
+```{r}
+head(colnames(final_data)) 
+```
+
+You should now see something like:
+
+```         
+[1] "gene_name"     "TCGA-56-7221"  "TCGA-43-7657"  "TCGA-60
+```
+
+### 🔹 Step 4. Verify consistency with clinical data
+
+```{r}
+sum(colnames(final_data)[-1] %in% clinical_data$case_id) 
+```
+
+and it shows 551 This tells you how many RNA-seq samples successfully match clinical cases.
+
+Optional diagnostic:
+
+```{r}
+setdiff(colnames(final_data)[-1], clinical_data$case_id) 
+```
+
+→ lists samples present in expression data but not in clinical info (you can safely ignore or filter them).
+
+save
+
+```{r}
+write.csv(
+  final_data,
+  file = "E:/acode/wsl/data2/GDCdata/TCGA-LUSC/rnaexp.csv")
+```
+
+------------------------------------------------------------------------
+
+# homwwork part
+
+## 🧬 TCGA-LUSC 项目数据简报
+
+### 📌 项目基本信息
+
+| 项目字段            | 内容                                         |
+|---------------------|----------------------------------------------|
+| **Project ID**      | TCGA-LUSC                                    |
+| **dbGaP Accession** | phs000178                                    |
+| **项目名称**        | 肺鳞状细胞癌（Lung Squamous Cell Carcinoma） |
+| **疾病类型**        | 2种疾病类型（包括肺鳞癌及相关亚型）          |
+| **主站点**          | 支气管和肺（Bronchus and Lung）              |
+| **所属计划**        | TCGA（癌症基因组图谱计划）                   |
+
+### 🧪 数据类型与可用性
+
++-------------+------------+------------+-------------------------------------+
+| 数据类型    | 样本数量   | 覆盖率     | 备注说明                            |
++=============+============+============+=====================================+
+| **RNA-Seq** | 501        | 99.4%      | 高覆盖率，适用于差异表达分析（DEG） |
++-------------+------------+------------+-------------------------------------+
+
+## 第一步：载入数据
+
+```{r}
+# ---- 1. 载入/安装必要包 ----
+pkgs_cran <- c("pheatmap","ggplot2","dplyr","RColorBrewer","factoextra","cluster","NbClust")
+pkgs_bioc  <- c("DESeq2","edgeR","apeglm","WGCNA")
+
+for(p in pkgs_cran){
+  if(!requireNamespace(p, quietly = TRUE)) install.packages(p)
+  library(p, character.only = TRUE)
+}
+if(!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+for(p in pkgs_bioc){
+  if(!requireNamespace(p, quietly = TRUE)) BiocManager::install(p, ask = FALSE, update = FALSE)
+  library(p, character.only = TRUE)
+}
+
+```
+
+```{r}
+# 去重，只保留第一个出现的 gene_name
+
+
+expr_raw <- final_data[!duplicated(final_data$gene_name), ]
+
+# 设置行名并删除 gene_name 列
+rownames(expr_raw) <- expr_raw$gene_name
+expr_raw$gene_name <- NULL
+
+# 转换为矩阵
+expr_mat <- as.matrix(expr_raw)
+mode(expr_mat) <- "numeric"
+
+```
+
+检测一下
+
+```{r}
+sum(is.na(expr_mat))  # 显示总共多少个 NA
+```
+
+## 🔧 使用 `impute.knn()` 进行 KNN 插补
+
+这个方法来自 `impute` 包，适用于 **行是基因、列是样本** 的表达矩阵。它通过寻找每个缺失值所在基因的 K 个最相似基因（邻居），用这些邻居的非缺失值来填补。
+
+### ✅ 安装并载入包
+
+```{r}
+if (!requireNamespace("impute", quietly = TRUE)) {
+    install.packages("impute", repos = "http://bioconductor.org/packages/release/bioc")
+}
+library(impute)
+```
+
+### 📌 插补表达矩阵
+
+```{r}
+# 确保是矩阵格式
+expr_mat <- as.matrix(expr_raw)  # 如果你还没转成矩阵
+mode(expr_mat) <- "numeric"
+# 去除缺失超过 50% 的行
+expr_mat <- expr_mat[rowMeans(is.na(expr_mat)) <= 0.5, ]
+
+# 执行 KNN 插补
+#imputed <- impute.knn(expr_mat, k = 8)  # k 可调，默认是10,大了会炸
+#expr_mat <- imputed$data  # 提取插补后的矩阵
+```
+
+``` r
+Error:
+! cannot allocate vector of size 13.2 Mb
+Show Traceback
+```
+
+电脑太垃圾，带不动，删掉得了
+
+## 🧠 参数说明（可调节）
+
+| 参数     | 默认值 | 说明                                 |
+|----------|--------|--------------------------------------|
+| `k`      | 10     | 用于插补的邻居数量（越大越平滑）     |
+| `rowmax` | 0.5    | 若某行缺失超过 50%，则用样本均值填补 |
+| `colmax` | 0.8    | 若某列缺失超过 80%，则报错           |
+| `maxp`   | 1500   | 每次插补的最大基因数，超过则分块处理 |
+
+###  第二步：移除含 NA 的基因（行）
+
+这是最常见的做法，确保每个基因都有完整表达值：
+
+``` {r}        
+expr_mat <- expr_mat[complete.cases(expr_mat), ]
+```
+
+**过滤阈值**：`cpm > 1` 且至少 `>=3` 个样本，适合样本量中等的研究；若样本少，可放宽到 `>=2`。
+
+```{r}
+
+#### 3. 过滤低表达基因（常见策略：CPM>1 在至少 n 样本出现） ####
+library(edgeR)
+dge <- DGEList(counts = expr_mat)
+keep <- rowSums(cpm(dge) > 1) >= 3   # 至少3个样本，可按样本量修改
+dge <- dge[keep, , keep.lib.sizes=FALSE]
+cat("genes retained:", nrow(dge), "\n")
+```
+
+```r
+Repeated column names found in count matrix
+genes retained: 40685 
+```
+
+```{r}
+# --------- 2. 匹配样本（表达矩阵列 与 clinical_data$case_id） ----------
+if(!"case_id" %in% colnames(clinical_data)){
+  stop("clinical_data 中找不到 case_id 列，请确认列名。")
+}
+samples_expr <- colnames(expr_mat)
+samples_clin <- clinical_data$case_id
+common_samples <- intersect(samples_expr, samples_clin)
+cat("表达中样本数:", length(samples_expr), "\n临床中样本数:", length(samples_clin), "\n匹配到的样本数:", length(common_samples), "\n")
+
+if(length(common_samples) < 3) stop("匹配样本过少，无法继续。")
+```
+
+```r
+表达中样本数: 562 
+临床中样本数: 493 
+匹配到的样本数: 490 
+```
+```{r}
+# 子集化并确保顺序一致
+expr_mat <- expr_mat[, common_samples, drop = FALSE]
+clinical_sub <- clinical_data[match(common_samples, clinical_data$case_id), , drop = FALSE]
+rownames(clinical_sub) <- clinical_sub$case_id
+```
+
+```{r}
+# --------- 3. 排除 Unknown stage 的样本 ----------
+if(!"simplified_stage" %in% colnames(clinical_sub)){
+  stop("clinical_data 中没有 simplified_stage 列，请先生成。")
+}
+keep_idx <- !is.na(clinical_sub$simplified_stage) & clinical_sub$simplified_stage != "Unknown"
+expr_mat <- expr_mat[, keep_idx, drop = FALSE]
+clinical_sub <- clinical_sub[keep_idx, , drop = FALSE]
+cat("用于差异分析的样本数:", ncol(expr_mat), "\n各组分布:\n")
+print(table(clinical_sub$simplified_stage))
+```
+
+```r
+用于差异分析的样本数: 486 
+各组分布:
+
+    Advanced (Stage III) Early/Local (Stage I-II) 
+                      83                      403 
+                      
+```
+
+**归一化**：TMM（edgeR）或 DESeq2 内置方法均可；DESeq2 更适合直接做差异分析（原始整数计数）。
+
+```{r}
+# --------- 4. 低表达基因过滤（edgeR CPM） ----------
+dge <- DGEList(counts = expr_mat)
+keep_genes <- rowSums(cpm(dge) > 1) >= 3   # 至少 3 个样本 CPM>1；可根据样本量调整
+dge <- dge[keep_genes, , keep.lib.sizes = FALSE]
+cat("过滤后保留基因数:", nrow(dge), "\n")
+```
+
+```r
+过滤后保留基因数: 39500 
+```
+
+```{r}
+# --------- 5. 无协变量（只根据 simplified_stage 分组） ----------
+clinical_sub$simplified_stage <- factor(clinical_sub$simplified_stage)
+if ("Early/Local (Stage I-II)" %in% levels(clinical_sub$simplified_stage)) {
+  clinical_sub$simplified_stage <- relevel(clinical_sub$simplified_stage, ref = "Early/Local (Stage I-II)")
+}
+
+# 设计公式
+design_formula <- ~ simplified_stage
+cat("使用的设计公式：", format(design_formula), "\n")
+
+expr_int <- apply(dge$counts, 2, as.integer)
+rownames(expr_int) <- rownames(dge$counts)
+dds <- DESeqDataSetFromMatrix(
+  countData = expr_int,
+  colData = clinical_sub,
+  design = design_formula
+)
+
+```
+
+```{r}
+# --------- 6. 运行 DESeq2 ----------
+dds <- DESeq(dds)
+
+# --------- 7. 获取差异结果 ----------
+contrast_vec <- c("simplified_stage", "Advanced (Stage III)", "Early/Local (Stage I-II)")
+res_raw <- results(dds, contrast = contrast_vec)
+
+if (requireNamespace("apeglm", quietly = TRUE)) {
+  resLFC <- lfcShrink(
+  dds,
+  coef = "simplified_stage_Advanced..Stage.III._vs_Early.Local..Stage.I.II.",
+  type = "apeglm"
+)
+
+} else {
+  message("未安装 apeglm，将返回未收缩的结果。")
+  resLFC <- res_raw
+}
+
+res_df <- as.data.frame(resLFC)
+res_df$gene <- rownames(res_df)
+res_df <- res_df[order(res_df$padj), ]
+
+write.csv(res_df, "DEG_Advanced_vs_Early.csv", row.names = FALSE)
+cat("差异分析结果已保存：DEG_Advanced_vs_Early.csv\n")
+```
+
+```{r}
+# --------- 8. 筛选显著基因 ----------
+sig <- subset(res_df, !is.na(padj) & padj < 0.1 & abs(log2FoldChange) >= 0.3)
+cat("显著 DEG 数量:", nrow(sig), "\n")
+write.csv(sig, "significant_DEGs.csv", row.names = FALSE)
+```
+
+```{r}
+# --------- 9. 火山图 ----------
+res_df$signif <- ifelse(!is.na(res_df$padj) & res_df$padj < 0.1 & abs(res_df$log2FoldChange) >= 0.3, "yes", "no")
+
+library(ggplot2)
+p_volcano <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(pvalue), color = signif)) +
+  geom_point(alpha = 0.6, size = 1.2) +
+  scale_color_manual(values = c("no" = "grey70", "yes" = "red")) +
+  theme_minimal() +
+  labs(title = "Volcano Plot (Advanced vs Early)", x = "log2 Fold Change", y = "-log10(p-value)")
+
+ggsave("Volcano_DEG.png", p_volcano, width = 7, height = 5, dpi = 300)
+```
+
+**变换用于聚类**：使用 VST 或 rlog（对低计数稳定）以获得接近正态分布的数据用于 PCA/聚类/热图
+
+**选择聚类基因**：通常取变异最大的前 500–2000 基因，topN 太小可能丢信息，太大可能引入噪声。
+
+**确定 k 的策略**：建议同时参考 WSS（肘点）、平均轮廓系数（silhouette）、Gap statistic 与 NbClust 的多指标投票，综合判断最稳健。
+
+**kmeans 参数**：`nstart=50` 可减少陷入局部最优的风险。
+
+**热图显示**：常按行（基因）做 z-score 标准化（便于显示基因表达模式差异），并用样本注释显示 kmeans 簇或临床变量
+
+**DEG 阈值**：常用 `padj < 0.05` 与 `|log2FC| > 1`；可根据研究目的放宽/收紧。

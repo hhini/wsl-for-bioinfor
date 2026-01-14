@@ -1,0 +1,292 @@
+# GWAS research
+
+### 📂 Dataset: GCST90204146
+
+This folder contains:
+
+-   `GCST90204146_buildGRCh37.tsv` (311 MB): The main summary statistics file for this GWAS study, mapped to the GRCh37 human genome build. It includes variant-level association data — typically SNP ID, chromosome, position, effect allele, other allele, effect size (beta or odds ratio), standard error, p-value, and sample size.
+
+-   `GCST90204146_buildGRCh37.tsv-meta.yaml`: Metadata file describing the study — trait, sample size, ancestry, genotyping platform, and other details.
+
+-   `harmonised/` **folder**: Contains harmonized versions of the summary statistics, which are cleaned and standardized for downstream analysis (e.g., Mendelian randomization, fine mapping).
+
+-   `md5sum.txt`: Checksums for file integrity verification.
+
+### ✅ Is this the data you need?
+
+If you're looking for **variant-level GWAS summary statistics** for a specific trait, and you're working with tools like PLINK, LDSC, or MR pipelines, then yes — this is the right kind of data.
+
+To confirm it's the right study, you should:
+
+-   Check the **trait or phenotype** associated with GCST90204146 in the GWAS Catalog.
+
+-   Review the **metadata YAML file** for sample size, ancestry, and study design.
+
+``` yaml
+# Study meta-data
+gwas_id: GCST90204146
+gwas_catalog_api: https://www.ebi.ac.uk/gwas/rest/api/studies/GCST90204146
+date_metadata_last_modified: 2025-01-13
+# 研究元数据 gwas_id: GCST90204146 gwas_catalog_api: https://www.ebi.ac.uk/gwas/rest/api/studies/GCST90204146 date_metadata_last_modified: 2025-01-13
+
+# Trait Information
+trait_description:
+  - Lymphocytic colitis
+ontology_mapping:
+  - EFO_1001294
+# 特征信息 trait_description: - 淋巴细胞性结肠炎 ontology_mapping: - EFO_1001294
+
+# Genotyping Information
+genome_assembly: GRCh37
+genotyping_technology:
+  - Genome-wide genotyping array
+# 基因分型信息 genome_assembly: GRCh37 genotyping_technology: - 全基因组基因分型阵列
+
+# Sample Information
+samples:
+  - sample_ancestry_category:
+      - European
+    sample_size: 5026
+# 样本信息样本：- sample_ancestry_category：- 欧洲样本大小：5026
+
+# Summary Statistic information
+data_file_name: GCST90204146_buildGRCh37.tsv
+file_type: pre-GWAS-SSF
+data_file_md5sum: 75010e220cfcbf935105e8b8d454a8a0
+# 摘要统计信息 data_file_name: GCST90204146_buildGRCh37.tsv file_type: pre-GWAS-SSF data_file_md5sum: 75010e220cfcbf935105e8b8d454a8a0
+
+# Harmonization status
+is_harmonised: false
+is_sorted: false
+
+# 协调状态 is_harmonised: false is_sorted: false
+```
+
+`GCST90204146_buildGRCh37.tsv-meta.yaml`. This file provides structured information about the GWAS study associated with the summary statistics file.
+
+### 📄 Key Metadata Fields (from the YAML)
+
+-   `gwas_id`: `GCST90204146` — Unique identifier for this GWAS study in the GWAS Catalog.
+
+-   `genome_build`: `GRCh37` — Indicates that variant positions are mapped to the GRCh37/hg19 human genome reference.
+
+-   `sample_size`: Total number of individuals included in the study.
+
+-   `trait`: The phenotype or disease being studied (e.g., height, diabetes, schizophrenia).
+
+-   `ancestry`: Population background of the samples (e.g., European, East Asian).
+
+-   `effect_type`: Whether the reported effect is a beta coefficient, odds ratio, or hazard ratio.
+
+-   `p_value_column`: Specifies which column in the TSV contains p-values.
+
+-   `effect_allele_column` and `other_allele_column`: Define the alleles used for association testing.
+
+-   `variant_id_column`: Identifies the SNP or variant ID column (e.g., rsID).
+
+-   `date_added_to_catalog`: When the study was added to the GWAS Catalog.
+
+### ✅ Is this metadata useful for you?
+
+Absolutely. It helps you:
+
+-   Validate the genome build (important for downstream tools like PLINK, LDSC, or liftOver).
+
+-   Understand the trait and population context.
+
+-   Confirm column mappings for parsing the TSV file correctly.
+
+-   Decide whether the study fits your research scope (e.g., ancestry, trait relevance, sample size).
+
+### 🐍 Step 1: Load and Inspect the TSV File in Python
+
+You can use `pandas` to load and preview the file:
+
+```{python}
+import pandas as pd
+
+# Load the TSV file
+file_path = "E:/acode/wsl/data5/GCST90204146_buildGRCh37.tsv"
+df = pd.read_csv(file_path, sep='\t')
+
+# Preview the first few rows
+print(df.head())
+
+# Check column names and basic info
+print(df.columns)
+print(df.info())
+```
+
+This will help you confirm the structure — typical columns include:
+
+-   `variant_id` or `rsid`
+
+-   `chromosome`, `position`
+
+-   `effect_allele`, `other_allele`
+
+-   `beta` or `odds_ratio`
+
+-   `standard_error`, `p_value`
+
+-   `sample_size`
+
+``` python
+  chromosome  base_pair_location  ...    beta standard_error
+0          10           100000625  ... -0.0109         0.0886
+1          10           100000645  ... -0.0784         0.1111
+2          10           100003242  ... -0.0426         0.1342
+3          10           100003304  ...  0.1357         0.2556
+4          10           100003785  ...  0.0588         0.0928
+
+[5 rows x 8 columns]
+Index(['chromosome', 'base_pair_location', 'p_value', 'effect_allele',
+       'other_allele', 'effect_allele_frequency', 'beta', 'standard_error'],
+      dtype='object')
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 7460065 entries, 0 to 7460064
+Data columns (total 8 columns):
+ #   Column                   Dtype  
+---  ------                   -----  
+ 0   chromosome               int64  
+ 1   base_pair_location       int64  
+ 2   p_value                  float64
+ 3   effect_allele            object 
+ 4   other_allele             object 
+ 5   effect_allele_frequency  float64
+ 6   beta                     float64
+ 7   standard_error           float64
+dtypes: float64(4), int64(2), object(2)
+memory usage: 455.3+ MB
+None
+```
+
+## 🧬 Plan A: Variant Annotation Workflow
+
+### 🔧 Core Tools & Packages
+
+| Tool | Language | Purpose | Notes |
+|------------------|------------------|------------------|------------------|
+| VEP (Variant Effect Predictor) | Python / CLI | Predict functional impact, gene mapping | You’ve used the API — great for automation |
+| FUMA GWAS | Web | SNP2GENE mapping, gene prioritization, tissue enrichment | Upload summary stats; interactive and rich |
+| ANNOVAR | CLI / Perl | Functional annotation, region-based filtering | Lightweight, good for coding/noncoding classification |
+| SnpEff | CLI / Java | Variant impact prediction | Fast and gene-centric |
+| gwaslab | Python | GWAS summary QC, annotation, harmonization | Great for batch processing and integration |
+| gwasglue2 | Python | Harmonization, annotation, MR prep | Works well with OpenGWAS and VEP |
+| biomaRt | R | Gene mapping, annotation via Ensembl | Flexible and scriptable in R |
+| ensembldb | R | Transcript/gene annotation | Good for GRCh37/38 compatibility |
+
+## 🧬 Plan A: Annotation-First GWAS Pipeline
+
+### 🔹 Step 1: Filter Significant SNPs by p-value
+
+You can filter using a genome-wide significance threshold (e.g., 5×10−8) or a relaxed threshold (e.g., 1×10−6) for exploratory analysis.
+
+```{python}
+import pandas as pd
+
+# Load GWAS summary stats
+# df = pd.read_csv("E:/acode/wsl/data5/GCST90204146_buildGRCh37.tsv", sep='\t')
+
+# Filter by p-value threshold
+threshold = 5e-5  # or use 1e-6 for broader inclusion
+df_sig = df[df["p_value"] < threshold]
+
+# Save filtered results
+df_sig.to_csv("filtered_snps.tsv", sep='\t', index=False)
+```
+
+check
+
+```{python}
+import pandas as pd
+# Load filtered GWAS variants
+df = pd.read_csv("filtered_snps.tsv", sep='\t')
+print(df.head())
+print(df.columns)
+```
+
+and we have done with the **5e-8** that no raw find and then we try the **5e-6** and we find 20 raw, it is a little for us .
+
+In the end ,we pick the 5e-5 then we get 388 raws
+
+### 🔹 Step 2: Annotate Variants
+
+#### since your dataset doesn't include `variant_id` (e.g., rsIDs), and the Ensembl VEP API doesn't accept raw coordinates like `10:13083627:T/C` as valid HGVS input, here's how to proceed:
+
+## 🧬 ✅ Updated Strategy for VEP Annotation Without rsIDs
+
+### 🔹 Option 1: Use Ensembl VEP CLI (Recommended)
+
+This bypasses the HGVS formatting issue entirely. You can run VEP locally using the **genomic coordinates and alleles** directly from your TSV file.
+
+#### 🛠️ Steps:
+
+1.  Install VEP (if not already):
+
+    ``` bash
+    conda install -c bioconda ensembl-vep 
+    ```
+
+2.  Prepare input file in VCF-like format:
+
+    ``` bash
+    #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO 10      13083627    .       T       C       .       .       . 10      13083777    .       A       G       .       .       . ... 
+    ```
+
+3.  Run VEP:
+
+    ``` bash
+    vep -i input.vcf --cache --assembly GRCh37 --format vcf --output_file annotated.vep.txt --fields "Gene,Consequence,Biotype,Impact"
+    ```
+
+### 🔹 Option 2: Map to rsIDs First (If Needed for API)
+
+You can use dbSNP or Ensembl’s REST API to map `chr:pos` to rsIDs. But this is slower and less reliable for batch work.
+
+### 🔹 Option 3: Use `gwaslab` or `gwasglue2` (Python)
+
+These packages support annotation and harmonization using Ensembl and OpenGWAS resources.
+
+python
+
+``` text
+from gwaslab import GWAS
+
+# Load your filtered GWAS file
+gwas = GWAS("filtered_snps.tsv", fmt="basic")
+
+# Annotate using VEP (requires internet or local cache)
+gwas.annotate(method="vep", genome_build="GRCh37")
+
+# Save annotated results
+gwas.df.to_csv("annotated_gwas.tsv", sep='\t', index=False)
+```
+
+### 4. Harmonize with `gwasglue2` (optional)
+
+If you're preparing for MR:
+
+```{python}
+from gwasglue2 import harmonise
+
+# Load exposure and outcome GWAS (both as pandas DataFrames)
+harmonised = harmonise(exposure_df, outcome_df)
+
+# Save harmonised dataset
+harmonised.to_csv("harmonised_for_mr.tsv", sep='\t', index=False)
+```
+
+### 🧭 Summary
+
+| Path | Pros | Tools |
+|------------------------|------------------------|------------------------|
+| **VEP CLI** | Fast, direct, accepts coordinates | `ensembl-vep`, `conda`, VCF |
+| **Map to rsIDs + API** | Works with REST API | `biomaRt`, Ensembl API |
+| **Use gwaslab/gwasglue2** | Integrated annotation + harmonization | Python packages |
+
+## 🧯 Root Cause
+
+-   `gwasglue2` depends on `pysam`, which in turn requires **htslib** and a working **make** environment.
+
+-   On Windows, this fails because `make` is not available by default, and `pysam` can't compile native extensions.

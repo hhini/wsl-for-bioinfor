@@ -1,0 +1,1099 @@
+---
+title: wsl
+authors:
+  - name: Norah Jones
+    affiliation: The University
+    roles: writing
+    corresponding: true
+bibliography: references.bib
+---
+
+# 直接实战吧
+
+## 🗂️ Step 1: Create Your Project Directory
+
+``` bash
+mkdir -p ~/bioinformatics_practice/{fastq_raw,fastq_subset,reference}
+cd ~/bioinformatics_practice
+```
+
+This creates:
+
+-   `fastq_raw`: for full FASTQ files
+
+-   `fastq_subset`: for trimmed/sampled FASTQ files
+
+-   `reference`: for your reference genome
+
+## 🧬 Step 2: Get Raw Data from GEO
+
+Let’s use **GSE134608** as an example. It links to **SRA accession SRR9693121**.
+
+### 🔧 Install SRA Toolkit (if not done yet)
+
+``` bash
+sudo apt update sudo apt install sra-toolkit vdb-config --interactive  # Accept defaults 
+```
+
+### 📥 Download FASTQ from SRA
+
+``` bash
+cd fastq_raw 
+fasterq-dump SRR9693121 --split-files --skip-technical --threads 4 
+```
+
+This will give you:
+
+-   `SRR9693121_1.fastq`
+
+-   `SRR9693121_2.fastq` (paired-end reads)
+
+-   . **Add Progress Feedback**
+
+    Try running with a progress bar:
+
+    ``` bash
+    fasterq-dump SRR9693121 --split-files --skip-technical --threads 4 -p 
+    ```
+
+    The `-p` flag shows progress so you know it’s working.
+
+And we get this after the installed
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ fasterq-dump SRR9693121 --split-files --skip-technical --threads 4 -p-p
+
+join   :|-------------------------------------------------- 100%
+concat :|-------------------------------------------------- 100%
+spots read      : 23,802,308
+reads read      : 47,604,616
+reads written   : 23,802,308
+reads 0-length  : 23,802,308
+jayz@localhost:~/bioinformatics_practice/fastq_raw$
+jayz@localhost:~/bioinformatics_practice/fastq_raw$
+```
+
+### 🧬 What Just Happened
+
+-   **Total spots read**: `23,802,308` — each spot is a sequencing fragment.
+
+-   **Total reads read**: `47,604,616` — paired-end reads (2 per spot).
+
+-   **Reads written**: `23,802,308` — only one read per spot was written.
+
+-   **Reads 0-length**: `23,802,308` — this suggests that one of the paired reads had zero-length sequences (possibly technical reads that were skipped).
+
+This likely means that only one of the paired files (`_1.fastq` or `_2.fastq`) was successfully written, and the other was skipped due to being empty or technical.
+
+and we check with `ls -lh`
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ ls -lh
+total 4.1G
+-rw-r--r-- 1 jayz jayz 4.1G Sep 18 16:17 SRR9693121_1.fastq
+drwxr-xr-x 2 jayz jayz 4.0K Sep 18 16:06 fasterq.tmp.localhost.1507
+```
+
+we’ve successfully downloaded the raw FASTQ file `SRR9693121_1.fastq`, and it’s a hefty one at **4.1 GB**. That’s a full dataset from a human RNA-seq experiment, and it’s ready for action.
+
+## ✂️ Step 3: Subset the FASTQ File
+
+Install `seqtk` if needed:
+
+``` bash
+sudo apt install seqtk 
+```
+
+Then sample 100,000 reads:
+
+``` bash
+mkdir -p ~/bioinformatics_practice/fastq_subset
+seqtk sample -s100 SRR9693121_1.fastq 100000 > ~/bioinformatics_practice/fastq_subset/SRR9693121_1_subset.fastq
+```
+
+-   `-s100`: sets a random seed for reproducibility
+
+-   `100000`: number of reads to keep
+
+You can verify the result:
+
+``` bash
+grep -c "^@" ~/bioinformatics_practice/fastq_subset/SRR9693121_1_subset.fastq 
+```
+
+and look what we have get
+
+```         
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ grep -c "^@" ~/bioinformatics_practice/fastq_subset/SRR9693121_1_subset.fastq
+100000
+```
+
+### 🧬 Step 2: Download the Reference Genome
+
+Since this is human RNA-seq, let’s grab **chromosome 1 from GRCh38**:
+
+``` bash
+mkdir -p ~/bioinformatics_practice/reference 
+cd ~/bioinformatics_practice/reference wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr1.fa.gz gunzip chr1.fa.gz 
+```
+
+Now you have `chr1.fa`—a clean reference for alignment.
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ mkdir -p ~/bioinformatics_practice/reference
+cd ~/bioinformatics_practice/reference
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr1.fa.gz
+gunzip chr1.fa.gz
+--2025-09-18 16:28:13--  https://hgdownload.soe.ucsc.edu/goldenPath/hg38/chromosomes/chr1.fa.gz
+Resolving hgdownload.soe.ucsc.edu (hgdownload.soe.ucsc.edu)... 128.114.119.163
+Connecting to hgdownload.soe.ucsc.edu (hgdownload.soe.ucsc.edu)|128.114.119.163|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 74778116 (71M) [application/x-gzip]
+Saving to: ‘chr1.fa.gz’
+
+chr1.fa.gz                    100%[=================================================>]  71.31M  11.0MB/s    in 19s
+
+2025-09-18 16:28:35 (3.73 MB/s) - ‘chr1.fa.gz’ saved [74778116/74778116]
+```
+
+### 🛠️ Step 3: Index the Reference
+
+Use BWA to index it:
+
+``` bash
+bwa index chr1.fa 
+```
+
+This creates `.amb`, `.ann`, `.bwt`, `.pac`, and `.sa` files—needed for alignment.
+
+``` bash
+
+jayz@localhost:~/bioinformatics_practice/reference$ bwa index chr1.fa
+[bwa_index] Pack FASTA... 1.01 sec
+[bwa_index] Construct BWT for the packed sequence...
+[BWTIncCreate] textLength=497912844, availableWord=47034604
+[BWTIncConstructFromPacked] 10 iterations done. 76325452 characters processed.
+[BWTIncConstructFromPacked] 20 iterations done. 142216380 characters processed.
+[BWTIncConstructFromPacked] 30 iterations done. 200776364 characters processed.
+[BWTIncConstructFromPacked] 40 iterations done. 252820604 characters processed.
+[BWTIncConstructFromPacked] 50 iterations done. 299073676 characters processed.
+[BWTIncConstructFromPacked] 60 iterations done. 340179500 characters processed.
+[BWTIncConstructFromPacked] 70 iterations done. 376710428 characters processed.
+[BWTIncConstructFromPacked] 80 iterations done. 409175164 characters processed.
+[BWTIncConstructFromPacked] 90 iterations done. 438025868 characters processed.
+[BWTIncConstructFromPacked] 100 iterations done. 463664428 characters processed.
+[BWTIncConstructFromPacked] 110 iterations done. 486447996 characters processed.
+[bwt_gen] Finished constructing BWT in 116 iterations.
+[bwa_index] 140.08 seconds elapse.
+[bwa_index] Update BWT... 0.80 sec
+[bwa_index] Pack forward-only FASTA... 0.67 sec
+[bwa_index] Construct SA from BWT and Occ... 73.27 sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa index chr1.fa
+[main] Real time: 628.709 sec; CPU: 215.820 sec
+```
+
+### 📁 BWA Index Files Explained
+
+| File Name | Purpose |
+|------------------------------------|------------------------------------|
+| `chr1.fa` | The original reference genome in FASTA format |
+| `chr1.fa.amb` | Records ambiguous bases (e.g., N) in the reference |
+| `chr1.fa.ann` | Annotation file: sequence names, lengths, and other metadata |
+| `chr1.fa.bwt` | Burrows-Wheeler Transform of the reference sequence—core of the FM-index |
+| `chr1.fa.pac` | Packed version of the reference (4 bases per byte) for efficient storage |
+| `chr1.fa.sa` | Suffix array used for fast substring search during alignment |
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/reference$ bwa mem chr1.fa ../fastq_subset/SRR9693121_1_subset.fastq > aligned.sam
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 100000 sequences (5100000 bp)...
+[M::mem_process_seqs] Processed 100000 reads in 1.057 CPU sec, 0.998 real sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa mem chr1.fa ../fastq_subset/SRR9693121_1_subset.fastq
+[main] Real time: 1.285 sec; CPU: 1.349 sec
+jayz@localhost:~/bioinformatics_practice/reference$ samtools view -S -b aligned.sam > aligned.bam
+jayz@localhost:~/bioinformatics_practice/reference$ samtools sort aligned.bam -o aligned.sorted.bam
+jayz@localhost:~/bioinformatics_practice/reference$ samtools index aligned.sorted.bam
+jayz@localhost:~/bioinformatics_practice/reference$ samtools flagstat aligned.sorted.bam
+100000 + 0 in total (QC-passed reads + QC-failed reads)
+100000 + 0 primary
+0 + 0 secondary
+0 + 0 supplementary
+0 + 0 duplicates
+0 + 0 primary duplicates
+70 + 0 mapped (0.07% : N/A)
+70 + 0 primary mapped (0.07% : N/A)
+0 + 0 paired in sequencing
+0 + 0 read1
+0 + 0 read2
+0 + 0 properly paired (N/A : N/A)
+0 + 0 with itself and mate mapped
+0 + 0 singletons (N/A : N/A)
+0 + 0 with mate mapped to a different chr
+0 + 0 with mate mapped to a different chr (mapQ>=5)
+```
+
+### 📊 Key Metrics Explained
+
+| Metric | Meaning |
+|------------------------------------|------------------------------------|
+| `100000 + 0 in total` | You had 100,000 reads in total (all passed QC) |
+| `100000 + 0 primary` | All reads are primary (not secondary or supplementary) |
+| `70 + 0 mapped (0.07%)` | Only **70 reads** successfully aligned to the reference genome |
+| `0 + 0 paired in sequencing` | No paired-end reads detected (you used single-end data) |
+| `0 + 0 properly paired` | Not applicable for single-end reads |
+| `0 + 0 duplicates` | No duplicate reads detected |
+| `0 + 0 singletons` | Again, not applicable for single-end reads |
+
+### ⚠️ Why Is Mapping So Low?
+
+Only **0.07%** of your reads mapped. That’s extremely low. Here are possible reasons:
+
+1.  **Reference Mismatch**: You used **human chromosome 1** (`chr1.fa`) as reference, but the reads might come from other chromosomes or even a different organism.
+
+2.  **Subset Bias**: The sampled reads might not include any that match chr1.
+
+3.  **Read Quality**: If the reads are low-quality or adapter-contaminated, they may fail to align.
+
+4.  **Truncated Reference**: Using only one chromosome limits alignment potential.
+
+### ✅ What You Can Do Next
+
+1.  **Use Full Human Genome** Instead of just `chr1.fa`, download the full GRCh38 reference:
+
+    ``` bash
+    wget ftp://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    bwa index Homo_sapiens.GRCh38.dna.primary_assembly.fa
+    ```
+
+2.  **Try Mapping to RNA-seq Reference** If your data is RNA-seq, use a splice-aware aligner like **HISAT2** or **STAR**, and include a GTF annotation file.
+
+3.  **Run FastQC** Check read quality:
+
+    ``` bash
+    fastqc ../fastq_subset/SRR9693121_1_subset.fa
+    ```
+
+### First part : download the whole reference not just `chr1.fa`
+
+``` bash
+ wget ftp://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+bwa index Homo_sapiens.GRCh38.dna.primary_assembly.fa
+--2025-09-18 16:47:44--  ftp://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+           => ‘Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz’
+Resolving ftp.ensembl.org (ftp.ensembl.org)... 193.62.193.169
+Connecting to ftp.ensembl.org (ftp.ensembl.org)|193.62.193.169|:21... connected.
+Logging in as anonymous ... Logged in!
+==> SYST ... done.    ==> PWD ... done.
+==> TYPE I ... done.  ==> CWD (1) /pub/release-110/fasta/homo_sapiens/dna ... done.
+==> SIZE Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz ... 881964081
+==> PASV ... done.    ==> RETR Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz ... done.
+Length: 881964081 (841M) (unauthoritative)
+
+Homo_sapiens.GRCh38.dna.prima 100%[=================================================>] 841.11M  3.08MB/s    in 26m 24s
+
+2025-09-18 17:15:11 (544 KB/s) - ‘Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz’ saved [881964081]
+
+[bwa_index] Pack FASTA... 12.01 sec
+[bwa_index] Construct BWT for the packed sequence...
+[BWTIncCreate] textLength=6199501436, availableWord=448219384
+[BWTIncConstructFromPacked] 10 iterations done. 99999996 characters processed.
+[BWTIncConstructFromPacked] 20 iterations done. 199999996 characters processed.
+···
+[BWTIncConstructFromPacked] 650 iterations done. 6103943980 characters processed.
+[BWTIncConstructFromPacked] 660 iterations done. 6133783772 characters processed.
+[BWTIncConstructFromPacked] 670 iterations done. 6160301452 characters processed.
+[BWTIncConstructFromPacked] 680 iterations done. 6183866396 characters processed.
+[bwt_gen] Finished constructing BWT in 688 iterations.
+[bwa_index] 2200.51 seconds elapse.
+[bwa_index] Update BWT... 10.72 sec
+[bwa_index] Pack forward-only FASTA... 16.79 sec
+[bwa_index] Construct SA from BWT and Occ...
+1648.22 sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa index Homo_sapiens.GRCh38.dna.primary_assembly.fa
+[main] Real time: 4656.355 sec; CPU: 3888.248 sec
+```
+
+## Step 1: Quality Control with FastQC
+
+### ✅ Install FastQC (if not already)
+
+``` bash
+sudo apt update sudo apt install fastqc 
+```
+
+### 📊 Run FastQC on the original FASTQ
+
+``` bash
+mkdir -p ~/bioinformatics_practice/qc_reports fastqc -o ~/bioinformatics_practice/qc_reports ~/bioinformatics_practice/raw_fastq/SRR9693121_1.fastq
+```
+
+This will generate:
+
+-   An `.html` report (open in browser)
+
+-   A `.zip` file with detailed metrics
+
+You can preview results like:
+
+-   Per base sequence quality
+
+-   GC content
+
+-   Adapter contamination
+
+-   Overrepresented sequences
+
+-   <div>
+
+    ### ✂️ Tools That *Do* Trim and Filter
+
+    </div>
+
+    | Tool | What It Does | Notes |
+    |------------------------|------------------------|------------------------|
+    | **Trim Galore!** | Adapter trimming + quality filtering | Wraps FastQC + Cutadapt |
+    | **Cutadapt** | Precise adapter removal | Highly customizable |
+    | **fastp** | All-in-one QC, trimming, filtering | Fast, multithreaded, generates reports |
+    | **AfterQC** | Automatic trimming, filtering, error correction | Especially good for Illumina data2 |
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ fastqc -o ../qc_reports SRR9693121_1.fastq
+null
+Started analysis of SRR9693121_1.fastq
+Approx 5% complete for SRR9693121_1.fastq
+Approx 10% complete for SRR9693121_1.fastq
+Approx 15% complete for SRR9693121_1.fastq
+Approx 20% complete for SRR9693121_1.fastq
+Approx 25% complete for SRR9693121_1.fastq
+Approx 30% complete for SRR9693121_1.fastq
+Approx 35% complete for SRR9693121_1.fastq
+Approx 40% complete for SRR9693121_1.fastq
+Approx 45% complete for SRR9693121_1.fastq
+Approx 50% complete for SRR9693121_1.fastq
+Approx 55% complete for SRR9693121_1.fastq
+Approx 60% complete for SRR9693121_1.fastq
+Approx 65% complete for SRR9693121_1.fastq
+Approx 70% complete for SRR9693121_1.fastq
+Approx 75% complete for SRR9693121_1.fastq
+Approx 80% complete for SRR9693121_1.fastq
+Approx 85% complete for SRR9693121_1.fastq
+Approx 90% complete for SRR9693121_1.fastq
+Approx 95% complete for SRR9693121_1.fastq
+Analysis complete for SRR9693121_1.fastq
+```
+
+check the file
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ ls
+SRR9693121_1.fastq  fasterq.tmp.localhost.1507
+jayz@localhost:~/bioinformatics_practice/fastq_raw$ cd ~/bioinformatics_practice/qc_reports
+jayz@localhost:~/bioinformatics_practice/qc_reports$ ls *.html
+SRR9693121_1_fastqc.html
+```
+
+check the output of html by firebox
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/qc_reports$ sudo snap install firefox
+2025-09-18T18:47:36+08:00 INFO Waiting for automatic snapd restart...
+firefox 142.0.1-1 from Mozilla✓ installed
+jayz@localhost:~/bioinformatics_practice/qc_reports$ ls
+SRR9693121_1_fastqc.html  SRR9693121_1_fastqc.zip
+jayz@localhost:~/bioinformatics_practice/qc_reports$ firefox SRR9693121_1_fastqc.html
+touch: cannot touch '/home/jayz/snap/firefox/common/.cache/desktop-runtime-date': No such file or directory
+[5376, Main Thread] WARNING: Failed to read portal settings: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.portal.Desktop was not provided by any .service files: 'glib warning', file /build/firefox/parts/firefox/build/toolkit/xre/nsSigHandlers.cpp:201
+```
+
+## ✂️ Step 2: Clean the Data with Trim Galore!
+
+### ✅ 1. **Install Cutadapt (Trim Galore depends on it)**
+
+``` bash
+sudo apt install cutadapt 
+```
+
+### ✅ 2. **Download and Set Up Trim Galore**
+
+``` bash
+wget https://github.com/FelixKrueger/TrimGalore/archive/refs/heads/master.zip unzip master.zip cd TrimGalore-master chmod +x trim_galore 
+```
+
+You can now run `./trim_galore` from this folder.
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/qc_reports/TrimGalore-master$ mkdir -p ~/bioinformatics_practice/clean_fastq
+./trim_galore --quality 20 --length 36 --illumina \
+-o ~/bioinformatics_practice/clean_fastq \
+~/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq
+Multicore support not enabled. Proceeding with single-core trimming.
+
+Output will be written into the directory: /home/jayz/bioinformatics_practice/clean_fastq/
+Writing report to '/home/jayz/bioinformatics_practice/clean_fastq/SRR9693121_1.fastq_trimming_report.txt'
+
+SUMMARISING RUN PARAMETERS
+==========================
+Input filename: /home/jayz/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq
+Trimming mode: single-end
+Trim Galore version: 0.6.10
+Cutadapt version: 4.4
+Number of cores used for trimming: 1
+Quality Phred score cutoff: 20
+Quality encoding type selected: ASCII+33
+Adapter sequence: 'AGATCGGAAGAGC' (Illumina TruSeq, Sanger iPCR; user defined)
+Maximum trimming error rate: 0.1 (default)
+Minimum required adapter overlap (stringency): 1 bp
+Minimum required sequence length before a sequence gets removed: 36 bp
+
+Cutadapt seems to be fairly up-to-date (version 4.4). Setting -j 1
+Writing final adapter and quality trimmed output to SRR9693121_1_trimmed.fq
+
+
+  >>> Now performing quality (cutoff '-q 20') and adapter trimming in a single pass for the adapter sequence: 'AGATCGGAAGAGC' from file /home/jayz/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq <<<
+10000000 sequences processed
+20000000 sequences processed
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -j 1 -e 0.1 -q 20 -O 1 -a AGATCGGAAGAGC /home/jayz/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq
+Processing single-end reads on 1 core ...
+Finished in 78.993 s (3.319 µs/read; 18.08 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:              23,802,308
+Reads with adapters:                20,623,778 (86.6%)
+Reads written (passing filters):    23,802,308 (100.0%)
+
+Total basepairs processed: 1,213,917,708 bp
+Quality-trimmed:                 449,346 bp (0.0%)
+Total written (filtered):  1,173,401,657 bp (96.7%)
+
+=== Adapter 1 ===
+
+Sequence: AGATCGGAAGAGC; Type: regular 3'; Length: 13; Trimmed: 20623778 times
+
+Minimum overlap: 1
+No. of allowed errors:
+1-9 bp: 0; 10-13 bp: 1
+
+Bases preceding removed adapters:
+  A: 0.3%
+  C: 99.3%
+  G: 0.3%
+  T: 0.0%
+  none/other: 0.0%
+WARNING:
+    The adapter is preceded by 'C' extremely often.
+    The provided adapter sequence could be incomplete at its 5' end.
+    Ignore this warning when trimming primers.
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+1       1181485 5950577.0       0       1181485
+2       19442025        1487644.2       0       19442025
+3       259     371911.1        0       259
+5       1       23244.4 0       1
+47      2       0.4     1       0 2
+49      6       0.4     1       0 6
+
+
+WARNING:
+    One or more of your adapter sequences may be incomplete.
+    Please see the detailed output above.
+
+RUN STATISTICS FOR INPUT FILE: /home/jayz/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq
+=============================================
+23802308 sequences processed in total
+Sequences removed because they became shorter than the length cutoff of 36 bp:  467 (0.0%)
+```
+
+## ✅ Key Takeaways from Your Cutadapt Report
+
+### 🔬 Adapter Removal
+
+-   **Adapter detected**: `AGATCGGAAGAGC` (Illumina universal adapter)
+
+-   **Reads with adapters**: **20.6 million** out of 23.8 million → **86.6%**
+
+-   **Trimmed occurrences**: 20,623,778 times
+
+That’s a high adapter presence, which is typical for RNA-seq data. You cleaned it thoroughly.
+
+### 📉 Quality Trimming
+
+-   **Quality cutoff**: Phred score 20
+
+-   **Bases trimmed due to low quality**: 449,346 bp (only 0.04%)
+
+-   This means your reads were generally high-quality—great news.
+
+### 📏 Length Filtering
+
+-   **Minimum read length**: 36 bp
+
+-   **Reads discarded for being too short**: 467 (negligible)
+
+### ⚠️ Adapter Warning
+
+> “The adapter is preceded by 'C' extremely often… may be incomplete at its 5' end.”
+
+This is common and not a problem unless you're trimming primers. You can safely ignore it for standard Illumina adapter trimming.
+
+### 🧼 3. **Run Trim Galore on Your FASTQ File**
+
+Assuming your file is single-end and located at `~/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq`, run:
+
+``` bash
+mkdir -p ~/bioinformatics_practice/clean_fastq ./trim_galore --quality 20 --length 36 --illumina \ -o ~/bioinformatics_practice/clean_fastq \ ~/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq 
+```
+
+#### What this does:
+
+-   `--quality 20`: trims bases with Phred score \< 20
+
+-   `--length 36`: removes reads shorter than 36 bp
+
+-   `--illumina`: auto-detects and removes Illumina adapters
+
+-   `-o`: sets output directory
+
+### 📊 4. **Check the Output**
+
+You’ll get:
+
+-   A cleaned FASTQ file: `SRR9693121_1_trimmed.fq`
+
+-   A `.txt` trimming report
+
+-   Optionally, a new FastQC report if you add `--fastqc`
+
+To re-run FastQC on the cleaned file:
+
+``` bash
+fastqc -o ~/bioinformatics_practice/qc_reports ~/bioinformatics_practice/clean_fastq/SRR9693121_1_trimmed.fq 
+```
+
+``` bash
+jayz@localhost:~/bioinformatics_practice/qc_reports/TrimGalore-master$ ls
+CHANGELOG.md  Docs  LICENSE  README.md  test_files  trim_galore
+jayz@localhost:~/bioinformatics_practice/qc_reports/TrimGalore-master$ ls ~/bioinformatics_practice/clean_fastq/
+SRR9693121_1.fastq_trimming_report.txt  SRR9693121_1_trimmed.fq
+jayz@localhost:~/bioinformatics_practice/qc_reports/TrimGalore-master$ fastqc -o ~/bioinformatics_practice/qc_reports ~/bioinformatics_practice/clean_fastq/SRR9693121_1_trimmed.fq
+null
+Started analysis of SRR9693121_1_trimmed.fq
+Approx 5% complete for SRR9693121_1_trimmed.fq
+Approx 10% complete for SRR9693121_1_trimmed.fq
+Approx 15% complete for SRR9693121_1_trimmed.fq
+Approx 20% complete for SRR9693121_1_trimmed.fq
+Approx 25% complete for SRR9693121_1_trimmed.fq
+Approx 30% complete for SRR9693121_1_trimmed.fq
+Approx 35% complete for SRR9693121_1_trimmed.fq
+Approx 40% complete for SRR9693121_1_trimmed.fq
+Approx 45% complete for SRR9693121_1_trimmed.fq
+Approx 50% complete for SRR9693121_1_trimmed.fq
+Approx 55% complete for SRR9693121_1_trimmed.fq
+Approx 60% complete for SRR9693121_1_trimmed.fq
+Approx 65% complete for SRR9693121_1_trimmed.fq
+Approx 70% complete for SRR9693121_1_trimmed.fq
+Approx 75% complete for SRR9693121_1_trimmed.fq
+Approx 80% complete for SRR9693121_1_trimmed.fq
+Approx 85% complete for SRR9693121_1_trimmed.fq
+Approx 90% complete for SRR9693121_1_trimmed.fq
+Approx 95% complete for SRR9693121_1_trimmed.fq
+Analysis complete for SRR9693121_1_trimmed.fq
+jayz@localhost:~/bioinformatics_practice/qc_reports/TrimGalore-master$ ls
+CHANGELOG.md  Docs  LICENSE  README.md  test_files  trim_galore
+jayz@localhost:~/bioinformatics_practice/qc_reports/TrimGalore-master$ cd  ~/bioinformatics_practice/qc_reports
+jayz@localhost:~/bioinformatics_practice/qc_reports$ ls
+SRR9693121_1_fastqc.html  SRR9693121_1_trimmed_fastqc.html  TrimGalore-master
+SRR9693121_1_fastqc.zip   SRR9693121_1_trimmed_fastqc.zip   master.zip
+jayz@localhost:~/bioinformatics_practice/qc_reports$ firefox  SRR9693121_1_trimmed_fastqc.html
+[7415, Main Thread] WARNING: Failed to read portal settings: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.portal.Desktop was not provided by any .service files: 'glib warning', file /build/firefox/parts/firefox/build/toolkit/xre/nsSigHandlers.cpp:201
+```
+
+## ⚡ Step-by-Step: Run `fastp` for Quality Filtering
+
+### ✅ 1. **Install fastp**
+
+If you haven’t already:
+
+``` bash
+sudo apt install fastp
+```
+
+### 🧼 2. **Run fastp on Your Original FASTQ**
+
+Let’s clean the original file again using fastp’s all-in-one capabilities:
+
+``` bash
+mkdir -p ~/bioinformatics_practice/fastp_clean fastp \ -i ~/bioinformatics_practice/fastq_raw/SRR9693121_1.fastq \ -o ~/bioinformatics_practice/fastp_clean/SRR9693121_1_fastp_clean.fastq \ --html ~/bioinformatics_practice/fastp_clean/SRR9693121_1_fastp_report.html \ --json ~/bioinformatics_practice/fastp_clean/SRR9693121_1_fastp_report.json \ -q 20 -u 30 -n 5 -l 36 
+```
+
+### 🔍 What These Parameters Do:
+
+-   `-q 20`: trim bases with quality \< Q20
+
+-   `-u 30`: discard reads with \>30% low-quality bases
+
+-   `-n 5`: discard reads with \>5 ambiguous bases (N)
+
+-   `-l 36`: discard reads shorter than 36 bp
+
+-   `--html` / `--json`: generate interactive reports
+
+``` bash
+Read1 before filtering: total reads: 23802308 total bases: 1213917708 Q20 bases: 1204979833(99.2637%) Q30 bases: 1200331563(98.8808%) Read1 after filtering: total reads: 23753330 total bases: 1211419830 Q20 bases: 1203369349(99.3355%) Q30 bases: 1198912027(98.9675%) Filtering result: reads passed filter: 23753330 reads failed due to low quality: 48978 reads failed due to too many N: 0 reads failed due to too short: 0 reads with adapter trimmed: 0 bases trimmed due to adapters: 0 Duplication rate (may be overestimated since this is SE data): 99.2325%
+```
+
+### ✅ 使用完整参考基因组
+
+已经下载并索引了完整的 GRCh38：
+
+### ✅ 什么是 GRCh38 Primary Assembly？
+
+它包含以下三部分：
+
+1.  **Chromosomal assembly**：标准的 1–22 条常染色体 + X、Y、MT（线粒体）
+
+2.  **Unlocalized contigs**：已知属于某条染色体，但具体位置未知的序列
+
+3.  **Unplaced contigs**：染色体归属未知的序列
+
+这些构成了所谓的 **primary assembly**，是 Ensembl 推荐用于大多数分析的版本。
+
+``` bash
+Homo_sapiens.GRCh38.dna.primary_assembly.fa 
+```
+
+重新运行 BWA：
+
+``` bash
+bwa mem Homo_sapiens.GRCh38.dna.primary_assembly.fa ../fastp_clean/SRR9693121_1_fastp_clean.fastq > aligned_full.sam samtools view -S -b aligned_full.sam > aligned_full.bam samtools sort aligned_full.bam -o aligned_full.sorted.bam samtools index aligned_full.sorted.bam samtools flagstat aligned_full.sorted.bam
+```
+
+```         
+[bam_sort_core] merging from 5 files and 1 in-memory blocks...
+23753330 + 0 in total (QC-passed reads + QC-failed reads)
+23753330 + 0 primary
+0 + 0 secondary
+0 + 0 supplementary
+0 + 0 duplicates
+0 + 0 primary duplicates
+109285 + 0 mapped (0.46% : N/A)
+109285 + 0 primary mapped (0.46% : N/A)
+0 + 0 paired in sequencing
+0 + 0 read1
+0 + 0 read2
+0 + 0 properly paired (N/A : N/A)
+0 + 0 with itself and mate mapped
+0 + 0 singletons (N/A : N/A)
+0 + 0 with mate mapped to a different chr
+0 + 0 with mate mapped to a different chr (mapQ>=5)
+```
+
+**SRR9693121** 是来自 **Rattus norvegicus（褐家鼠）** 的 **miRNA-Seq** 数据。这解释了你之前遇到的比对率极低的问题——你一直在用人类参考基因组（GRCh38）进行比对，而你的数据其实是来自老鼠 🐭。
+
+## 🧠 数据集关键信息
+
+| 项目         | 内容                                |
+|--------------|-------------------------------------|
+| **物种**     | Rattus norvegicus（褐家鼠）         |
+| **测序类型** | miRNA-Seq                           |
+| **平台**     | Illumina NextSeq 500                |
+| **总 reads** | 23.8M                               |
+| **来源**     | 肌肉干细胞，脂质因子处理            |
+| **建库方法** | Norgen Biotek 小 RNA 文库制备试剂盒 |
+| **布局**     | 单端（Single-end）                  |
+| **选择方式** | 尺寸分级（size fractionation）      |
+
+## ❗ 为什么人类参考基因组无法比对
+
+你的 reads 是来自老鼠的 microRNA，而你用的是人类的参考基因组（GRCh38），这两个物种之间差异巨大，尤其是在非编码 RNA 区域。自然就导致了比对率几乎为零。
+
+## ✅ 正确做法：使用老鼠参考基因组
+
+你可以下载 Ensembl 提供的 Rattus norvegicus 的参考基因组：
+
+## 📥 下载参考基因组（FASTA）
+
+bash
+
+```         
+# 下载 GRCr8 的基因组序列
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/323/735/GCA_036323735.1_GRCr8/GCA_036323735.1_GRCr8_genomic.fna.gz
+
+# 解压
+gunzip GCA_036323735.1_GRCr8_genomic.fna.gz
+```
+
+## 下载基因注释文件（GTF）
+
+bash
+
+```         
+# 下载对应的 GTF 注释文件 wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/323/735/GCA_036323735.1_GRCr8/GCA_036323735.1_GRCr8_genomic.gtf.gz  # 解压 gunzip GCA_036323735.1_GRCr8_genomic.gtf.gz 
+```
+
+你刚才尝试下载的 GTF 文件：
+
+bash
+
+```         
+https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/036/323/735/GCA_036323735.1_GRCr8/GCA_036323735.1_GRCr8_genomic.gtf.gz 
+```
+
+返回了 **404 错误**，说明这个路径下并没有提供 GTF 文件。这是因为 NCBI 的 GenBank 版本（GCA\_）通常**不包含注释文件**，而 GTF 文件是由 **RefSeq（GCF\_）版本**提供的。
+
+## ✅ 正确下载 GTF 注释文件的方法
+
+你应该使用 RefSeq 版本的 GRCr8，即：
+
+代码
+
+```         
+GCF_036323735.1_GRCr8 
+```
+
+### 📥 下载命令建议：
+
+bash
+
+```         
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/036/323/735/GCF_036323735.1_GRCr8/GCF_036323735.1_GRCr8_genomic.gtf.gz gunzip GCF_036323735.1_GRCr8_genomic.gtf.gz 
+```
+
+这个路径是 NCBI RefSeq 官方提供的注释文件，适用于你之前下载的 GRCr8 基因组序列。
+
+## 🧬 构建 BWA 索引
+
+bash
+
+```         
+# 使用 BWA 构建索引 bwa index GCA_036323735.1_GRCr8_genomic.fna 
+```
+
+这一步会生成 `.amb`, `.ann`, `.bwt`, `.pac`, `.sa` 等索引文件，用于后续比对。
+
+## 🧠 为什么要运行 `bwa index`
+
+BWA 是一个比对工具，它不能直接使用原始的 `.fna` 或 `.fa` 文件进行比对。它需要先把参考基因组转换成一种**专用的索引格式**，这样才能快速定位每条 read 在基因组中的位置。
+
+### 📦 索引文件包含的内容：
+
+运行 `bwa index` 后，会生成以下文件：
+
+-   `.amb`：碱基信息
+
+-   `.ann`：注释信息
+
+-   `.bwt`：Burrows-Wheeler Transform（核心压缩结构）
+
+-   `.pac`：packed sequence
+
+-   `.sa`：suffix array（加速搜索）
+
+这些文件共同构成了一个高效的数据结构，让 BWA 能够在几秒钟内完成数百万条 reads 的比对。
+
+```         
+[bwt_gen] Finished constructing BWT in 638 iterations.
+[bwa_index] 2017.11 seconds elapse.
+[bwa_index] Update BWT... 9.43 sec
+[bwa_index] Pack forward-only FASTA... 14.31 sec
+[bwa_index] Construct SA from BWT and Occ... 1668.93 sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa index GCA_036323735.1_GRCr8_genomic.fna
+[main] Real time: 3720.950 sec; CPU: 3719.994 sec
+jayz@localhost:~/bioinformatics_practice/reference$ bwa mem GCF_036323735.1_GRCr8_genomic.fna ../fastp_clean/SRR9693121_1_fastp_clean.fastq > aligned_rat.sam
+[E::bwa_idx_load_from_disk] fail to locate the index files
+jayz@localhost:~/bioinformatics_practice/reference$ ls
+GCA_036323735.1_GRCr8_genomic.fna                aligned.sorted.bam.bai
+GCA_036323735.1_GRCr8_genomic.fna.amb            aligned_fastp.bam
+GCA_036323735.1_GRCr8_genomic.fna.ann            aligned_fastp.sam
+GCA_036323735.1_GRCr8_genomic.fna.bwt            aligned_fastp.sorted.bam
+GCA_036323735.1_GRCr8_genomic.fna.pac            aligned_fastp.sorted.bam.bai
+GCA_036323735.1_GRCr8_genomic.fna.sa             aligned_full.bam
+GCF_036323735.1_GRCr8_genomic.gtf                aligned_full.sam
+Homo_sapiens.GRCh38.dna.primary_assembly.fa      aligned_full.sorted.bam
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.amb  aligned_full.sorted.bam.bai
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.ann  aligned_rat.sam
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.bwt  chr1.fa
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.pac  chr1.fa.amb
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.sa   chr1.fa.ann
+aligned.bam                                      chr1.fa.bwt
+aligned.sam                                      chr1.fa.pac
+aligned.sorted.bam                               chr1.fa.sa
+```
+
+### 🚀 Step 2：运行 BWA 比对
+
+bash
+
+```         
+bwa mem GCA_036323735.1_GRCr8_genomic.fna ../fastp_clean/SRR9693121_1_fastp_clean.fastq > aligned_rat.sam 
+```
+
+这一步会生成 `aligned_rat.sam`，包含所有比对信息。
+
+```         
+[M::mem_process_seqs] Processed 27650 reads in 0.443 CPU sec, 0.387 real sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa mem GCA_036323735.1_GRCr8_genomic.fna ../fastp_clean/SRR9693121_1_fastp_clean.fastq
+[main] Real time: 342.553 sec; CPU: 356.735 sec
+```
+
+### 🧱 Step 3：转换为 BAM、排序并索引
+
+bash
+
+```         
+samtools view -S -b aligned_rat.sam > aligned_rat.bam
+samtools sort aligned_rat.bam -o aligned_rat.sorted.bam
+samtools index aligned_rat.sorted.bam
+```
+
+```         
+jayz@localhost:~/bioinformatics_practice/reference$ samtools flagstat aligned_rat.sorted.bam
+23753330 + 0 in total (QC-passed reads + QC-failed reads)
+23753330 + 0 primary
+0 + 0 secondary
+0 + 0 supplementary
+0 + 0 duplicates
+0 + 0 primary duplicates
+125236 + 0 mapped (0.53% : N/A)
+125236 + 0 primary mapped (0.53% : N/A)
+0 + 0 paired in sequencing
+0 + 0 read1
+0 + 0 read2
+0 + 0 properly paired (N/A : N/A)
+0 + 0 with itself and mate mapped
+0 + 0 singletons (N/A : N/A)
+0 + 0 with mate mapped to a different chr
+0 + 0 with mate mapped to a different chr (mapQ>=5)
+```
+
+## 当前比对结果总结
+
+| 指标                 | 数值             |
+|----------------------|------------------|
+| 总 reads             | 23,753,330       |
+| 成功比对             | 125,236          |
+| 比对率               | **0.53%**        |
+| 配对信息             | 单端数据，无配对 |
+| 重复、补充、次级比对 | 全部为 0         |
+
+## 🧠 可能原因分析
+
+### 1. ❌ 参考基因组不匹配
+
+你使用的是 **GCA_036323735.1_GRCr8_genomic.fna**，这是 rat 的完整基因组。但 miRNA-Seq 数据通常是非常短的序列（18–24 nt），而 rat 的基因组包含大量非 miRNA 区域。如果你没有使用专门的 miRNA 库或注释，很多 reads 会无法比对。
+
+### 2. ⚠️ 没有使用 miRNA 专属参考
+
+miRNA-Seq 通常使用的是：
+
+-   miRBase 提供的 mature miRNA 序列（FASTA）
+
+-   或者 Ensembl 的 ncRNA 注释（GTF）
+
+你目前使用的是整个基因组作为参考，这对于 miRNA 来说可能太“宽泛”了。
+
+### 3. ⚠️ 建库方式或测序质量问题
+
+-   是否是 3' adapter 建库？
+
+-   是否有 poly-A 尾？
+
+-   是否清洗了 adapter？
+
+-   是否是 rat 样本但用了人类 miRNA 库？
+
+## 🗂️ 第一步：查看整个项目文件结构
+
+你可以使用以下命令在项目根目录查看所有文件和子目录：
+
+bash
+
+```         
+tree -h -L 3 ~/bioinformatics_practice 
+```
+
+-   `-h`：显示文件大小
+
+-   `-L 3`：最多显示 3 层目录结构（你可以调整）
+
+-   如果没有安装 `tree`，可以先运行：`sudo apt install tree`
+
+## ✅ 第二步：建议保留的关键结果文件
+
+根据你的流程，以下是值得保留的文件类型：
+
+| 文件类型 | 示例文件名 | 用途 |
+|----|----|----|
+| **比对结果 BAM** | `aligned_rat.sorted.bam` | 后续表达量分析 |
+| **BAM 索引** | `aligned_rat.sorted.bam.bai` | 快速定位 |
+| **表达量计数结果** | `counts.txt` | featureCounts 输出 |
+| **miRNA 注释 GTF** | `miRNA_annotations.gtf` | 注释参考 |
+| **参考基因组 FASTA** | `GCA_036323735.1_GRCr8_genomic.fna` | 可复用 |
+| **参考索引文件** | `.bwt`, `.pac`, `.amb`, `.ann`, `.sa` | BWA 索引 |
+| **FastQC 报告** | `*_fastqc.html` | 质量检查结果 |
+
+## 🧹 第三步：删除中间文件和原始数据
+
+你可以删除以下内容：
+
+-   原始 FASTQ 文件（如 `SRR9693121_1.fastq`）
+
+-   清洗后的 FASTQ（如 `*_fastp_clean.fastq`），如果你已经完成比对
+
+-   所有 `.sam` 文件（如 `aligned_rat.sam`）
+
+-   临时 BAM 文件（未排序的）
+
+-   中间 QC 文件（如 `.zip`）
+
+### 删除命令示例：
+
+bash
+
+```         
+rm ~/bioinformatics_practice/fastq_raw/*.fastq
+rm ~/bioinformatics_practice/fastp_clean/*.fastq
+rm ~/bioinformatics_practice/reference/*.sam
+rm ~/bioinformatics_practice/reference/aligned*.bam
+```
+
+⚠️ **注意**：请先确认你已经保留了 `aligned_rat.sorted.bam` 和 `.bai` 文件！
+
+```         
+jayz@localhost:~/bioinformatics_practice/mirbase_rno$
+tree -h -L 3 ~/bioinformatics_practice
+[4.0K]  /home/jayz/bioinformatics_practice
+├── [4.0K]  clean_fastq
+│   ├── [2.1K]  SRR9693121_1.fastq_trimming_report.txt
+│   └── [3.1G]  SRR9693121_1_trimmed.fq
+├── [4.0K]  fasterq.tmp.localhost.1083
+│   ├── [ 25M]  SRR9693121.localhost.1083.0000.1
+│   ├── [ 26M]  SRR9693121.localhost.1083.0001.1
+│   ├── [ 40M]  SRR9693121.localhost.1083.0002.1
+│   └── [ 27M]  SRR9693121.localhost.1083.0003.1
+├── [4.0K]  fastp_clean
+│   ├── [4.0G]  SRR9693121_1_fastp_clean.fastq
+│   ├── [213K]  SRR9693121_1_fastp_report.html
+│   └── [ 46K]  SRR9693121_1_fastp_report.json
+├── [4.0K]  fastq_raw
+│   ├── [4.0G]  SRR9693121_1.fastq
+│   └── [4.0K]  fasterq.tmp.localhost.1507
+│       ├── [137M]  SRR9693121.localhost.1507.0000.1
+│       ├── [157M]  SRR9693121.localhost.1507.0001.1
+│       ├── [149M]  SRR9693121.localhost.1507.0002.1
+│       └── [118M]  SRR9693121.localhost.1507.0003.1
+├── [4.0K]  fastq_subset
+│   └── [ 14M]  SRR9693121_1_subset.fastq
+├── [4.0K]  mirbase_rno
+│   └── [   0]  rno_mature.fa
+├── [4.0K]  qc_reports
+│   ├── [804K]  SRR9693121_1_fastqc.html
+│   ├── [756K]  SRR9693121_1_fastqc.zip
+│   ├── [814K]  SRR9693121_1_trimmed_fastqc.html
+│   ├── [744K]  SRR9693121_1_trimmed_fastqc.zip
+│   ├── [4.0K]  TrimGalore-master
+│   │   ├── [ 22K]  CHANGELOG.md
+│   │   ├── [4.0K]  Docs
+│   │   ├── [ 34K]  LICENSE
+│   │   ├── [1.8K]  README.md
+│   │   ├── [4.0K]  test_files
+│   │   └── [139K]  trim_galore
+│   └── [ 26M]  master.zip
+└── [4.0K]  reference
+    ├── [2.7G]  GCA_036323735.1_GRCr8_genomic.fna
+    ├── [3.6K]  GCA_036323735.1_GRCr8_genomic.fna.amb
+    ├── [ 10K]  GCA_036323735.1_GRCr8_genomic.fna.ann
+    ├── [2.7G]  GCA_036323735.1_GRCr8_genomic.fna.bwt
+    ├── [679M]  GCA_036323735.1_GRCr8_genomic.fna.pac
+    ├── [1.3G]  GCA_036323735.1_GRCr8_genomic.fna.sa
+    ├── [840M]  GCF_036323735.1_GRCr8_genomic.gtf
+    ├── [2.9G]  Homo_sapiens.GRCh38.dna.primary_assembly.fa
+    ├── [ 18K]  Homo_sapiens.GRCh38.dna.primary_assembly.fa.amb
+    ├── [ 16K]  Homo_sapiens.GRCh38.dna.primary_assembly.fa.ann
+    ├── [2.9G]  Homo_sapiens.GRCh38.dna.primary_assembly.fa.bwt
+    ├── [739M]  Homo_sapiens.GRCh38.dna.primary_assembly.fa.pac
+    ├── [1.4G]  Homo_sapiens.GRCh38.dna.primary_assembly.fa.sa
+    ├── [996K]  aligned.bam
+    ├── [ 15M]  aligned.sam
+    ├── [991K]  aligned.sorted.bam
+    ├── [114K]  aligned.sorted.bam.bai
+    ├── [159M]  aligned_fastp.bam
+    ├── [3.4G]  aligned_fastp.sam
+    ├── [158M]  aligned_fastp.sorted.bam
+    ├── [122K]  aligned_fastp.sorted.bam.bai
+    ├── [163M]  aligned_full.bam
+    ├── [3.4G]  aligned_full.sam
+    ├── [157M]  aligned_full.sorted.bam
+    ├── [1.4M]  aligned_full.sorted.bam.bai
+    ├── [165M]  aligned_rat.bam
+    ├── [3.4G]  aligned_rat.sam
+    ├── [157M]  aligned_rat.sorted.bam
+    ├── [1.4M]  aligned_rat.sorted.bam.bai
+    ├── [242M]  chr1.fa
+    ├── [2.5K]  chr1.fa.amb
+    ├── [  45]  chr1.fa.ann
+    ├── [237M]  chr1.fa.bwt
+    ├── [ 59M]  chr1.fa.pac
+    └── [119M]  chr1.fa.sa
+
+13 directories, 60 files
+```
+
+## 🧠 为什么 C盘还占空间？
+
+WSL 使用一个虚拟磁盘文件（通常是 `.vhdx`）来存储 Linux 子系统的数据。即使你在 WSL 中删除了文件，**空间不会自动释放**，除非你手动压缩这个虚拟磁盘。
+
+### 📍 步骤：
+
+1.  打开 PowerShell（管理员）
+
+2.  输入以下命令：
+
+powershell
+
+```         
+diskpart 
+```
+
+然后在 `diskpart>` 提示符下依次输入：
+
+text
+
+```         
+select vdisk file="C:\Users\31435\AppData\Local\wsl\{49e678dd-1912-4b46-8d2e-2022839de267}\ext4.vhdx" 
+attach vdisk readonly
+compact vdisk 
+detach vdisk 
+exit 
+```
+
+> ⚠️ 注意：确保 WSL 已关闭（运行 `wsl --shutdown`）
+
+-   ✅ 成功选择 `.vhdx` 文件
+
+-   ✅ 只读挂载
+
+-   ✅ 完整压缩
+
+-   ✅ 安全卸载
+
+这意味着你在 WSL 中删除的那些大文件（比如参考基因组、原始 FASTQ 等）现在已经真正从 C 盘释放出来了。你的系统空间应该明显回升，WSL 虚拟磁盘也变得更轻盈。
+
+## 🔚 项目清理完成，你现在的状态：
+
+-   WSL 项目目录干净整洁
+
+-   只保留关键结果文件（如 `.bam.bai`）
+
+-   虚拟磁盘已压缩，释放了数 GB 空间
+
+-   没有误删任何重要数据

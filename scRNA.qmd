@@ -1,0 +1,1618 @@
+### 🔍 Step 1: List `.gz` files in the directory
+
+```{r}
+# 1. Define the directory path
+library(fs)
+
+# Display the structure of a specific folder, e.g., "my_project"
+dir_tree("E:/acode/wsl/data6/gz")
+
+# Limit the depth of recursion (e.g., to 2 levels)
+#dir_tree("E:/acode/wsl/data6/gz", recurse = 2)
+```
+
+This will show you all the compressed files — likely including `barcodes.tsv.gz`, `features.tsv.gz`, and `matrix.mtx.gz`.
+
+### ✅ Summary: What to do with each file type
+
+| File Type | Examples | Should You Unzip? | Purpose |
+|------------------|------------------|------------------|------------------|
+| `matrix.mtx.gz` | `*_RNA_matrix.mtx.gz` | ❌ No | Sparse count matrix |
+| `barcodes.tsv.gz` | `*_RNA_barcodes.tsv.gz` | ❌ No | Cell barcodes |
+| `features.tsv.gz` | `*_RNA_features.tsv.gz` | ❌ No | Gene/feature annotations |
+| `filtered_contig_annotations.csv.gz` | `*_BCR_*.csv.gz`, `*_TCR_*.csv.gz` | ✅ Yes | BCR/TCR annotations (used for V(D)J analysis) |
+
+### 🧬 Why keep RNA files compressed?
+
+-   Tools like `Read10X()` in Seurat or `read10xCounts()` in DropletUtils automatically handle `.gz` files.
+
+-   Compression saves disk space and speeds up I/O.
+
+-   The format is standardized — decompressing risks altering line endings or encoding
+
+------------------------------------------------------------------------
+
+Here is the **R script** to create the directories based on the metadata in the filenames and move the corresponding files.
+
+### R Script for File Reorganization
+
+```{r}
+# ----------------------------------------------------
+# 1. Define the target directory
+# ----------------------------------------------------
+# Use the appropriate path on your system.
+data_dir <- "E:/acode/wsl/data6/gz"
+setwd(data_dir) # Set the working directory to the 'gz' folder
+
+# ----------------------------------------------------
+# 2. Get the list of all gzipped files
+# ----------------------------------------------------
+# Get all files ending with .gz in the current directory
+all_files <- list.files(path = ".", pattern = "\\.gz$", full.names = FALSE)
+print(paste("Found", length(all_files), "files to process."))
+
+# ----------------------------------------------------
+# 3. Extract unique sample names (metadata) to be used as folder names
+# ----------------------------------------------------
+
+# The goal is to extract the portion before the file-type tag:
+# e.g., 'GSM8078430_CD005_NI_MES_RNA' from 'GSM8078430_CD005_NI_MES_RNA_features.tsv.gz'
+
+# Use regular expressions to capture the part of the name we want to keep.
+# The pattern captures everything from the start (^) up to and including
+# _RNA, _BCR, or _TCR, then excludes the file-type tag (barcodes, features, etc.).
+sample_names <- gsub(
+  pattern = "_(barcodes\\.tsv|features\\.tsv|matrix\\.mtx|filtered_contig_annotations\\.csv)\\.gz$",
+  replacement = "",
+  x = all_files
+)
+
+# Find the unique folder names we need to create
+unique_sample_names <- unique(sample_names)
+print(paste("Found", length(unique_sample_names), "unique samples."))
+
+# ----------------------------------------------------
+# 4. Create directories and move files
+# ----------------------------------------------------
+
+for (sample_folder in unique_sample_names) {
+  
+  # A. Create the directory
+  if (!dir.exists(sample_folder)) {
+    dir.create(sample_folder, recursive = TRUE)
+    cat("Created directory:", sample_folder, "\n")
+  }
+  
+  # B. Identify all files belonging to this sample
+  # We look for all files in the original list that start with the unique name
+  files_to_move <- all_files[startsWith(all_files, sample_folder)]
+  
+  # C. Define the new paths
+  new_paths <- file.path(sample_folder, files_to_move)
+  
+  # D. Move the files
+  # file.rename() is used for moving files within the same volume
+  move_success <- file.rename(from = files_to_move, to = new_paths)
+  
+  if (all(move_success)) {
+    cat("Moved", length(files_to_move), "files into", sample_folder, "\n")
+  } else {
+    cat("ERROR: Failed to move some files for", sample_folder, "\n")
+  }
+}
+
+cat("\nFile organization complete! 📦\n")
+```
+
+### Explanation of Key R Functions
+
+-   **`setwd(data_dir)`**: Sets the working directory. It's often easier to manage file operations when you are working directly in the target directory.
+
+-   **`list.files()`**: Gets a vector of all file names (relative to the current directory).
+
+-   **`gsub(pattern, replacement, x)`**: This is the core of the renaming logic. It uses a **regular expression** (`pattern`) to search for and remove the tail end of the filename (like `_barcodes.tsv.gz`). By replacing that pattern with an empty string (`""`), we are left with just the desired folder name (e.g., `GSM8078430_CD005_NI_MES_RNA`).
+
+-   **`unique()`**: Reduces the list of extracted names to only one instance per sample, ensuring we only try to create each folder once.
+
+-   **`dir.create()`**: Creates the new subdirectory. `recursive = TRUE` ensures any parent directories are also created (though not strictly necessary in this case).
+
+-   **`startsWith()`**: A vectorized way to identify all files in the original list that belong to the current `sample_folder`.
+
+-   **`file.path()`**: A cross-platform way to build file paths. It automatically handles the correct separator (`/` or `\`).
+
+-   **`file.rename(from = old_path, to = new_path)`**: This function is used to **move** files in R when the source and destination are on the same disk or file system. It returns `TRUE` for successful moves.
+
+## Recommended Single-Cell Data Processing Workflow
+
+The established folder structure (e.g., `GSM..._RNA` containing the `barcodes`, `features`, and `matrix` files) is the **standard format for tools like 10X Genomics' CellRanger**, making it easy for most single-cell analysis packages to import.
+
+### 1. Data Ingestion and Object Creation
+
+The first step is to read the data from the newly created folders and load it into a dedicated single-cell object structure.
+
+-   **RNA Data (Count Matrices):**
+
+    -   **Tool:** The primary function will be a helper that reads the **three gzipped files** (`barcodes.tsv.gz`, `features.tsv.gz`, `matrix.mtx.gz`) from each `..._RNA` folder (e.g., `GSM8078430_CD005_NI_MES_RNA`).
+
+    -   **Action:** This data forms the **raw count matrix**. Each sample is loaded separately to create its own object (e.g., a Seurat object or a SingleCellExperiment object).
+
+    -   **Key Advantage:** Since the files are in their compressed format, the software can often read them **directly** without manual unzipping, saving disk space and time.
+
+-   **BCR/TCR Data (Clonotype Annotations):**
+
+    -   **Action:** Load the `..._BCR_filtered_contig_annotations.csv.gz` and `..._TCR_filtered_contig_annotations.csv.gz` files.
+
+    -   **Tool/Action:** This data is typically processed separately and then **merged (added)** to the corresponding RNA object's metadata (cell-level information). This links gene expression to the immune receptor sequences.
+
+### 2. Quality Control (QC) and Filtering
+
+After initial loading, you must assess and filter the raw data to remove low-quality cells and features.
+
+-   **Cell-Level QC:**
+
+    1.  **Mitochondrial Content:** Calculate the percentage of reads mapping to mitochondrial genes. **Cells with unusually high mitochondrial content** are typically dead or stressed and should be filtered out.
+
+    2.  **Number of Features (Genes):** Filter out cells with **too few unique genes** (likely empty droplets) and cells with **too many unique genes** (likely doublets or multiplets).
+
+    3.  **Total Counts (UMI):** Filter based on the total number of reads/UMI per cell.
+
+-   **Feature-Level QC:**
+
+    -   Filter out **genes expressed in too few cells** (e.g., in less than 3 cells), as they offer little discriminatory power and add noise.
+
+### 3. Normalization and Scaling
+
+Raw counts are not directly comparable due to differences in sequencing depth across cells.
+
+-   **Normalization:** Adjust the raw counts to account for sequencing depth (library size). The goal is to make the gene expression levels comparable between cells.
+
+-   **Feature Selection:** Select the most **highly variable features (genes)** across the samples. These are the genes most likely to drive biological heterogeneity.
+
+-   **Scaling and Centering:** Scale the data for dimensionality reduction. This standardizes the expression of each gene across all cells, often to prepare the data for Principal Component Analysis (PCA).
+
+### 4. Dimensionality Reduction and Clustering
+
+The final steps involve compressing the data to find underlying cell populations.
+
+-   **Dimensionality Reduction (PCA):** Use the scaled, variable genes to perform **Principal Component Analysis (PCA)** to capture the most significant sources of variation in a few components (e.g., 30-50 PCs).
+
+-   **Non-linear Reduction (UMAP/t-SNE):** Use the PCA results to generate a **2D visualization** (e.g., **UMAP** or t-SNE) that preserves the local relationships between cells, making it easy to visualize distinct clusters.
+
+-   **Clustering:** Apply an unsupervised clustering algorithm (e.g., **Louvain or Leiden algorithm**) to the PCA results to formally define cell populations (clusters).
+
+## Recommended scRNA-seq Workflow: Phase 1 (Data Loading & Integration)
+
+The files you organized (like `GSM8078430_CD005_NI_MES_RNA/`) are ready to be read and processed in R, typically using the **Seurat** or **SingleCellExperiment (SCE)** frameworks.
+
+### 1. Initial Data Loading
+
+You'll iterate through each of your **scRNA-seq folders** (`..._RNA`) and load the count data.
+
+-   **Load Count Data:** Use a function designed to read the 10X Genomics file format (barcodes, features, matrix). In Seurat, this is often `Read10X()` followed by `CreateSeuratObject()`.
+
+-   **Initial Metadata:** As you load each sample, you **must add metadata** that identifies the sample origin. This is critical for downstream batch correction and analysis.
+
+    -   **Sample ID:** (e.g., `GSM8078396`)
+
+    -   **Tissue:** (e.g., `Ileum` or `Mesentery`)
+
+    -   **Disease Status:** (e.g., `Control` or `Crohn's disease`)
+
+    -   **Inflammation Status:** (e.g., `Non-inflamed` or `Inflamed`)
+
+    -   **Replicate:** (e.g., `rep 1`, `rep 2`, `rep 3`)
+
+### 2. The Necessity of Integration (Batch Correction)
+
+**Why Integration is Essential:**
+
+While you could simply merge the count matrices, samples processed on different days, by different people, or with different reagent lots introduce technical variations known as **batch effects**. These effects often lead to cells from the same sample clustering together regardless of their true biological cell type.
+
+|  |  |
+|------------------------------------|------------------------------------|
+| **Integration Action** | **Rationale** |
+| **Integration** | **Corrects technical variations (batch effects)** to ensure that the primary source of variation is the **biology** (cell type, disease state), not the sample origin. |
+| **Simple Merge** | **Preserves batch effects**, which will dominate the clustering, causing cells from **GSM8078396** to cluster separately from cells in **GSM8078430**, even if they are the exact same cell type. |
+
+**Key Integration Methods in R:**
+
+The most common and robust methods today use anchor-based approaches or reference mapping:
+
+1.  **Seurat's Integration (FindIntegrationAnchors/IntegrateData):** This method identifies "anchors" (pairs of cells from different datasets that are in a similar biological state) and uses them to correct the data spaces. **This is the current gold standard in the field.**
+
+2.  **Harmony:** A fast and highly effective method that performs iterative and non-linear batch correction on the Principal Component Analysis (PCA) embedding space.
+
+### Step 1: Setup and Define Metadata
+
+First, we set up the environment, define the directory, and structure the metadata provided in your prompt into an accessible format.
+
+R
+
+```{r}
+# 1. Install and Load Packages (Run only if needed)
+# install.packages(c("Seurat", "tidyverse")) # Install the primary packages
+# install.packages("patchwork") # For visualization layouts
+
+library(Seurat)
+library(tidyverse)
+library(patchwork)
+
+# Set the base directory containing all the subfolders (the 'gz' folder)
+data_dir <- "E:/acode/wsl/data6/gz"
+setwd(data_dir)
+```
+
+then
+
+```{r}
+# ----------------------------------------------------
+# 2. Structure the Comprehensive Metadata
+# ----------------------------------------------------
+# We create a dataframe containing all the sample information.
+# This is crucial for batch correction and annotation.
+
+metadata_table <- read.table(text = "
+    GSM_ID      Tissue    Disease_Status  Inflammation_State  Replicate  Assay_Type
+    GSM8078396  Ileum     Control         Non-inflamed        rep_1      RNA
+    GSM8078397  Ileum     Control         Non-inflamed        rep_1      BCR
+    GSM8078398  Ileum     Control         Non-inflamed        rep_1      TCR
+    GSM8078399  Mesentery Control         Non-inflamed        rep_1      RNA
+    GSM8078400  Mesentery Control         Non-inflamed        rep_1      TCR
+    GSM8078401  Mesentery Control         Non-inflamed        rep_2      RNA
+    GSM8078402  Mesentery Control         Non-inflamed        rep_2      BCR
+    GSM8078403  Mesentery Control         Non-inflamed        rep_2      TCR
+    GSM8078404  Mesentery Crohn_disease   Inflamed            rep_1      RNA
+    GSM8078405  Mesentery Crohn_disease   Inflamed            rep_1      BCR
+    GSM8078406  Mesentery Crohn_disease   Inflamed            rep_1      TCR
+    GSM8078407  Mesentery Crohn_disease   Non-inflamed        rep_1      RNA
+    GSM8078408  Mesentery Crohn_disease   Non-inflamed        rep_1      BCR
+    GSM8078409  Mesentery Crohn_disease   Non-inflamed        rep_1      TCR
+    GSM8078410  Ileum     Crohn_disease   Inflamed            rep_2      RNA
+    GSM8078411  Ileum     Crohn_disease   Inflamed            rep_2      BCR
+    GSM8078412  Ileum     Crohn_disease   Inflamed            rep_2      TCR
+    GSM8078413  Ileum     Crohn_disease   Non-inflamed        rep_2      RNA
+    GSM8078414  Ileum     Crohn_disease   Non-inflamed        rep_2      BCR
+    GSM8078415  Ileum     Crohn_disease   Non-inflamed        rep_2      TCR
+    GSM8078416  Mesentery Crohn_disease   Inflamed            rep_2      RNA
+    GSM8078417  Mesentery Crohn_disease   Inflamed            rep_2      BCR
+    GSM8078418  Mesentery Crohn_disease   Inflamed            rep_2      TCR
+    GSM8078419  Mesentery Crohn_disease   Non-inflamed        rep_2      RNA
+    GSM8078420  Mesentery Crohn_disease   Non-inflamed        rep_2      BCR
+    GSM8078421  Ileum     Crohn_disease   Inflamed            rep_3      RNA
+    GSM8078422  Ileum     Crohn_disease   Inflamed            rep_3      BCR
+    GSM8078423  Ileum     Crohn_disease   Inflamed            rep_3      TCR
+    GSM8078424  Ileum     Crohn_disease   Non-inflamed        rep_3      RNA
+    GSM8078425  Ileum     Crohn_disease   Non-inflamed        rep_3      BCR
+    GSM8078426  Ileum     Crohn_disease   Non-inflamed        rep_3      TCR
+    GSM8078427  Mesentery Crohn_disease   Inflamed            rep_3      RNA
+    GSM8078428  Mesentery Crohn_disease   Inflamed            rep_3      BCR
+    GSM8078429  Mesentery Crohn_disease   Inflamed            rep_3      TCR
+    GSM8078430  Mesentery Crohn_disease   Non-inflamed        rep_3      RNA
+    GSM8078431  Mesentery Crohn_disease   Non-inflamed        rep_3      BCR
+    GSM8078432  Mesentery Crohn_disease   Non-inflamed        rep_3      TCR
+", header = TRUE, stringsAsFactors = FALSE) %>%
+  filter(Assay_Type == "RNA") # Filter down to only the RNA samples for this phase
+
+# Create a list of all RNA sample folders
+rna_folders <- list.dirs(path = data_dir, recursive = FALSE, full.names = FALSE)
+rna_folders <- rna_folders[grepl("_RNA$", rna_folders)]
+print(paste("Found", length(rna_folders), "RNA sample folders."))
+```
+
+save
+
+```{r}
+write.csv(metadata_table,"E:/acode/wsl/data6/gz/metadata_table.csv")
+```
+
+### Step 2: Load Data and Initial QC
+
+We loop through all the RNA folders to load the data, apply minimal quality control, and store them in a list of Seurat objects.
+
+The default file names expected by `Read10X()` are usually just `barcodes.tsv`, `features.tsv`, and `matrix.mtx` (or their gzipped versions). However, your files retain the **full metadata prefix** in the filename (e.g., `GSM8078396_CTL001_NI_ILEUM_RNA_barcodes.tsv.gz`).
+
+To fix this, we need to modify the R script in **Step 2 (Data Loading)** to tell `Read10X()` where to look, or rename the files to the expected format. **The simplest fix is to use the `custom_feature_columns` argument or rename the files.**
+
+``` r
+ {r}        
+# ----------------------------------------------------
+# 3. Load Data, Add Metadata, and Perform Initial QC (FIXED)
+# ----------------------------------------------------
+seurat_list <- list()
+
+for (i in seq_along(rna_folders)) {
+    folder_name <- rna_folders[i]
+    current_path <- file.path(data_dir, folder_name)
+
+    # 3.1. Define the specific filenames inside the folder
+    prefix <- paste0(folder_name, "_") 
+    
+    # 3.2. Define the expected standard names for Seurat
+    standard_files <- c("barcodes.tsv.gz", "features.tsv.gz", "matrix.mtx.gz")
+    
+    # 3.3. Define the current full names in your directory
+    full_files <- c(
+        paste0(prefix, "barcodes.tsv.gz"),
+        paste0(prefix, "features.tsv.gz"),
+        paste0(prefix, "matrix.mtx.gz")
+    )
+    
+    # Check if all files exist before proceeding
+    if (!all(file.exists(file.path(current_path, full_files)))) {
+        cat(paste("ERROR: Missing one or more files in", folder_name, "\n"))
+        next # Skip to the next folder if files are missing
+    }
+    
+    tryCatch({
+      
+      # TEMPORARY RENAMING STEP 🛠️
+      # Rename full names to standard names in the directory for Read10X()
+      file.rename(from = file.path(current_path, full_files),
+                  to = file.path(current_path, standard_files))
+
+      # 3.4. Read the 10X data. Read10X now expects the standard names.
+      data_matrix <- Read10X(data.dir = current_path)
+
+      # TEMPORARY RENAMING BACK STEP ⬅️
+      # Rename the files back to their original names
+      file.rename(from = file.path(current_path, standard_files),
+                  to = file.path(current_path, full_files))
+                  
+      # 3.5. Create Seurat Object and continue with the rest of the original script
+      sample_id <- gsub("_.*$", "", folder_name) 
+      seurat_obj <- CreateSeuratObject(counts = data_matrix, project = sample_id)
+
+      # 3.6. Add Metadata and QC (rest of the original code)
+      meta_row <- metadata_table[metadata_table$GSM_ID == sample_id, ]
+      
+      seurat_obj$Sample_ID <- sample_id
+      seurat_obj$Tissue <- meta_row$Tissue
+      seurat_obj$Disease_Status <- meta_row$Disease_Status
+      seurat_obj$Inflammation_State <- meta_row$Inflammation_State
+      seurat_obj$Replicate <- meta_row$Replicate
+
+      seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = "^MT-")
+      seurat_obj <- subset(seurat_obj, 
+                           subset = nFeature_RNA > 200 & 
+                                    nFeature_RNA < 4000 & 
+                                    percent.mt < 15)
+
+      seurat_obj <- NormalizeData(seurat_obj, verbose = FALSE)
+      seurat_obj <- FindVariableFeatures(seurat_obj, selection.method = "vst", nfeatures = 2000, verbose = FALSE)
+
+      seurat_list[[i]] <- seurat_obj
+      cat(paste("Successfully processed and filtered:", folder_name, "\n"))
+
+    }, error = function(e) {
+      cat(paste("ERROR processing", folder_name, " (post-rename attempt):", e$message, "\n"))
+      # Ensure files are renamed back even on error if possible (optional but safe)
+      if (all(file.exists(file.path(current_path, standard_files)))) {
+          file.rename(from = file.path(current_path, standard_files),
+                      to = file.path(current_path, full_files))
+      }
+    })
+}
+
+# Remove any empty/failed entries
+seurat_list <- purrr::compact(seurat_list)
+print(paste("Total samples ready for integration:", length(seurat_list)))
+
+# The rest of the integration code (Step 3) remains the same.
+```
+
+``` r
+Successfully processed and filtered: GSM8078396_CTL001_NI_ILEUM_RNA 
+Successfully processed and filtered: GSM8078399_CTL001_NI_MES_RNA 
+Successfully processed and filtered: GSM8078401_CTL002_NI_MES_RNA 
+Successfully processed and filtered: GSM8078404_CD003_INF_MES_RNA 
+Successfully processed and filtered: GSM8078407_CD003_NI_MES_RNA 
+Successfully processed and filtered: GSM8078410_CD004_INF_ILEUM_RNA 
+Successfully processed and filtered: GSM8078413_CD004_NI_ILEUM_RNA 
+Successfully processed and filtered: GSM8078416_CD004_INF_MES_RNA 
+Successfully processed and filtered: GSM8078419_CD004_NI_MES_RNA 
+Successfully processed and filtered: GSM8078421_CD005_INF_ILEUM_RNA 
+Successfully processed and filtered: GSM8078424_CD005_NI_ILEUM_RNA 
+Successfully processed and filtered: GSM8078427_CD005_INF_MES_RNA 
+Successfully processed and filtered: GSM8078430_CD005_NI_MES_RNA 
+[1] "Total samples ready for integration: 13"
+```
+
+``` r
+> print(head(seurat_obj))
+                   orig.ident nCount_RNA nFeature_RNA  Sample_ID    Tissue Disease_Status
+AAACCTGCAATGTAAG-1 GSM8078430       2783         1226 GSM8078430 Mesentery  Crohn_disease
+AAACCTGGTACTTCTT-1 GSM8078430       5405         2104 GSM8078430 Mesentery  Crohn_disease
+AAACCTGGTCAAGCGA-1 GSM8078430       4606         1658 GSM8078430 Mesentery  Crohn_disease
+AAACCTGTCGCTTAGA-1 GSM8078430       2569         1147 GSM8078430 Mesentery  Crohn_disease
+AAACGGGCACATGACT-1 GSM8078430       3587         1458 GSM8078430 Mesentery  Crohn_disease
+AAACGGGGTGTTGGGA-1 GSM8078430       4740         1790 GSM8078430 Mesentery  Crohn_disease
+AAACGGGTCAGGCGAA-1 GSM8078430        636          461 GSM8078430 Mesentery  Crohn_disease
+AAACGGGTCCGTCAAA-1 GSM8078430       4621         1650 GSM8078430 Mesentery  Crohn_disease
+AAACGGGTCGGTGTTA-1 GSM8078430       4824         1993 GSM8078430 Mesentery  Crohn_disease
+AAAGATGAGCCACGCT-1 GSM8078430        546          420 GSM8078430 Mesentery  Crohn_disease
+                   Inflammation_State Replicate percent.mt
+AAACCTGCAATGTAAG-1       Non-inflamed     rep_3   7.114625
+AAACCTGGTACTTCTT-1       Non-inflamed     rep_3   5.124884
+AAACCTGGTCAAGCGA-1       Non-inflamed     rep_3   3.582284
+AAACCTGTCGCTTAGA-1       Non-inflamed     rep_3  10.548852
+AAACGGGCACATGACT-1       Non-inflamed     rep_3   6.774463
+AAACGGGGTGTTGGGA-1       Non-inflamed     rep_3   4.324895
+AAACGGGTCAGGCGAA-1       Non-inflamed     rep_3   9.119497
+AAACGGGTCCGTCAAA-1       Non-inflamed     rep_3   4.587752
+AAACGGGTCGGTGTTA-1       Non-inflamed     rep_3  11.007463
+AAAGATGAGCCACGCT-1       Non-inflamed     rep_3   7.509158
+```
+
+#### ✅ For a single Seurat object (`seurat_obj`)
+
+```{r}
+saveRDS(seurat_obj, file = "E:/acode/wsl/data6/gz/seurat_obj.rds") 
+```
+
+#### ✅ For a list of Seurat objects (`seurat_list`)
+
+```{r}
+saveRDS(seurat_list, file = "E:/acode/wsl/data6/gz/seurat_list.rds") 
+```
+
+This saves them as `.rds` files, which you can later reload using:
+
+```{r}
+seurat_obj <- readRDS("E:/acode/wsl/data6/gz/seurat_obj.rds") 
+seurat_list <- readRDS("E:/acode/wsl/data6/gz/seurat_list.rds") 
+```
+
+To see more information, we should focus on the **summary statistics** for this specific sample (`GSM8078430`) and for the **entire set of samples** (`seurat_list`). This provides a vital check on the data quality **before integration**.
+
+Here are the step-by-step R commands to get more informative summaries:
+
+## Step A: Summary for the Individual Sample (`GSM8078430`)
+
+To inspect a single Seurat object further, we'll generate basic summary plots showing the distributions of the QC metrics.
+
+```{r}
+# Assuming 'seurat_obj' currently holds the GSM8078430 data
+# If you are outside the loop, you might need to access it from the list:
+# seurat_obj <- seurat_list[[13]] # Or whichever index corresponds to GSM8078430
+
+# Load the necessary library for plotting
+library(ggplot2)
+
+# A.1. VlnPlot of QC Metrics
+# Shows the distribution of counts, features, and mitochondrial percentage after filtering.
+VlnPlot(seurat_obj, 
+        features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 3, 
+        pt.size = 0.1) +
+  plot_annotation(title = paste("QC Metrics for Sample:", unique(seurat_obj$Sample_ID)))
+#
+```
+
+![](plot-36.png)
+
+## Step B: Summary for the Entire List of Samples (`seurat_list`)
+
+Before integration, it's critical to compare the QC metrics across all samples in your `seurat_list` to spot any batches with unusually high or low quality.
+
+```{r}
+# B.1. Create a combined metadata dataframe from the seurat_list
+# We extract the cell-level metadata (containing all QC metrics) from each object
+combined_meta <- purrr::map_dfr(seurat_list, function(obj) {
+    as.data.frame(obj@meta.data) %>%
+        # Add a column for the number of cells after filtering
+        mutate(Cells_Post_QC = ncol(obj)) 
+})
+
+# B.2. Sample-wise Summary Table (Number of Cells)
+# Shows how many cells remain after the initial QC filtering for each sample.
+cells_per_sample <- combined_meta %>%
+  group_by(Sample_ID, Tissue, Disease_Status, Inflammation_State) %>%
+  summarise(
+    Total_Cells_Post_QC = n(),
+    .groups = 'drop'
+  )
+
+print("--- Cells Remaining After Initial QC ---")
+print(cells_per_sample)
+
+# B.3. VlnPlot of QC Metrics, Grouped by Sample
+# Plots the distribution of features, counts, and percent.mt across all 13 samples.
+qc_plot_1 <- ggplot(combined_meta, aes(x = Sample_ID, y = nFeature_RNA, fill = Sample_ID)) +
+  geom_violin() +
+  labs(y = "Features per Cell (Genes)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+qc_plot_2 <- ggplot(combined_meta, aes(x = Sample_ID, y = percent.mt, fill = Sample_ID)) +
+  geom_violin() +
+  labs(y = "Percent Mitochondrial (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none")
+
+print(qc_plot_1 / qc_plot_2) # Use patchwork to stack the plots
+```
+
+``` r
+] "--- Cells Remaining After Initial QC ---"
+# A tibble: 13 × 5
+   Sample_ID  Tissue    Disease_Status Inflammation_State Total_Cells_Post_QC
+   <chr>      <chr>     <chr>          <chr>                            <int>
+ 1 GSM8078396 Ileum     Control        Non-inflamed                      1307
+ 2 GSM8078399 Mesentery Control        Non-inflamed                       264
+ 3 GSM8078401 Mesentery Control        Non-inflamed                      1678
+ 4 GSM8078404 Mesentery Crohn_disease  Inflamed                          2412
+ 5 GSM8078407 Mesentery Crohn_disease  Non-inflamed                      1918
+ 6 GSM8078410 Ileum     Crohn_disease  Inflamed                          1873
+ 7 GSM8078413 Ileum     Crohn_disease  Non-inflamed                      1650
+ 8 GSM8078416 Mesentery Crohn_disease  Inflamed                          4103
+ 9 GSM8078419 Mesentery Crohn_disease  Non-inflamed                      4406
+10 GSM8078421 Ileum     Crohn_disease  Inflamed                          2011
+11 GSM8078424 Ileum     Crohn_disease  Non-inflamed                      1291
+12 GSM8078427 Mesentery Crohn_disease  Inflamed                          4358
+13 GSM8078430 Mesentery Crohn_disease  Non-inflamed                      2550
+```
+
+![](plot-37.png)
+
+## Phase 2: Batch Correction (Seurat Integration)
+
+We assume the `seurat_list` variable containing your 13 pre-processed Seurat objects is available in your R environment.
+
+### Step 3: Select Integration Features and Find Anchors
+
+This step identifies the most variable and conserved genes across all your samples (`seurat_list`) and then finds **anchors**, which are mutual nearest neighbors between pairs of datasets that represent cells in a similar biological state.
+
+```{r}
+# ----------------------------------------------------
+# 3. Find Integration Anchors
+# ----------------------------------------------------
+
+# (Required because your data objects exceed the default 500 MiB limit)
+# We set it to 4 GiB (4096 MiB) for safety.
+options(future.globals.maxSize = 4096 * 1024^2)
+
+cat("3.1 Selecting 2000 features for integration...\n")
+
+# Select the top 2000 most highly variable features across all objects.
+features <- SelectIntegrationFeatures(object.list = seurat_list, nfeatures = 2000)
+
+cat("3.2 Finding Integration Anchors (This may take several minutes)...\n")
+
+# Find the anchors. This is the core computational step for batch correction.
+# The 'dims' argument specifies which Principal Components (PCs) to use when
+# finding anchors; 1:30 is a standard starting point.
+immune.anchors <- FindIntegrationAnchors(object.list = seurat_list, 
+                                          anchor.features = features, 
+                                          dims = 1:30,
+                                          verbose = FALSE)
+
+cat("Anchor finding complete.\n")
+```
+
+### Step 4: Integrate the Data
+
+This step uses the calculated anchors to create an **"integrated"** expression matrix. This integrated matrix represents the batch-corrected gene expression values.
+
+```{r}
+# ----------------------------------------------------
+# 4. Integrate the Data
+# ----------------------------------------------------
+cat("4.1 Integrating data based on anchors...\n")
+
+# Use the anchorset to integrate the data into a single Seurat object.
+# The result, 'seurat.integrated', will contain the corrected counts in a new 'integrated' assay.
+seurat.integrated <- IntegrateData(anchorset = immune.anchors, 
+                                   dims = 1:20, 
+                                   verbose = FALSE)
+
+cat("Integration complete. Single object created.\n")
+
+# 4.2 Set Default Assay
+# Set the 'integrated' assay as the default for all downstream dimensionality reduction
+# and clustering, as this contains the batch-corrected data.
+DefaultAssay(seurat.integrated) <- "integrated"
+
+cat("Default assay set to 'integrated'. The object is now ready for clustering (PCA/UMAP).\n")
+```
+
+To save integrated Seurat object so you can load it the next day, use `saveRDS()` like this:
+
+```{r}
+# Save the integrated Seurat object to disk 
+saveRDS(seurat.integrated, file = "E:/acode/wsl/data6/gz/seurat_integrated.rds") 
+```
+
+------------------------------------------------------------------------
+
+# PCA and UMAP to reduce dimensions
+
+```{r}
+# Load the integrated Seurat object from disk 
+seurat.integrated <- readRDS("E:/acode/wsl/data6/gz/seurat_integrated.rds") 
+```
+
+## Phase 3: Dimensionality Reduction and Clustering
+
+This process takes the high-dimensional, corrected gene expression data and maps it into a low-dimensional space for effective visualization and grouping.
+
+### Scale Data and Run PCA
+
+Before running PCA, you must scale the integrated data. Scaling ensures that genes with high variance don't disproportionately influence the results.
+
+```{r}
+# ----------------------------------------------------
+# 5. Scale Data and Run PCA
+# ----------------------------------------------------
+library(Seurat)
+library(tidyverse)
+library(patchwork)
+cat("5.1 Scaling integrated data...\n")
+
+# Scale data on the Integrated assay. This is necessary for PCA.
+# The 'integrated' assay is already the default.
+seurat.integrated <- ScaleData(seurat.integrated, verbose = FALSE)
+
+cat("5.2 Running Principal Component Analysis (PCA)...\n")
+
+# Run PCA on the scaled integrated data. 
+# We typically run a high number of PCs (e.g., 50) and then decide how many to use later.
+seurat.integrated <- RunPCA(seurat.integrated, npcs = 50, verbose = FALSE)
+
+cat("PCA complete.\n")
+
+# 5.3 Visualize PCA results (Elbow Plot)
+# The Elbow Plot helps you decide how many PCs capture most of the signal (the 'knee' point).
+print(ElbowPlot(seurat.integrated, ndims = 50))
+#
+```
+
+![](plot-38.png)
+
+### Visualize Key Metadata on PCA Scatter Plots
+
+These plots show how your main experimental factors (Tissue, Disease, etc.) relate to the largest sources of variation (PC1 and PC2).
+
+```{r}
+# ----------------------------------------------------
+# 9.1 PCA Plot - Colored by Experimental Factors
+# ----------------------------------------------------
+cat("9.1 Generating PCA Scatter Plots colored by metadata...\n")
+
+# A. PCA Plot colored by Tissue (Ileum vs. Mesentery)
+p_tissue <- DimPlot(seurat.integrated, 
+                    reduction = "pca", 
+                    dims = c(1, 2), 
+                    group.by = "Tissue") + 
+  ggtitle("PCA 1 vs 2: Colored by Tissue")
+
+# B. PCA Plot colored by Disease Status (Control vs. Crohn's)
+p_disease <- DimPlot(seurat.integrated, 
+                     reduction = "pca", 
+                     dims = c(1, 2), 
+                     group.by = "Disease_Status") + 
+  ggtitle("PCA 1 vs 2: Colored by Disease Status")
+
+# C. PCA Plot colored by Inflammation State (Inflamed vs. Non-inflamed)
+p_inflam <- DimPlot(seurat.integrated, 
+                    reduction = "pca", 
+                    dims = c(1, 2), 
+                    group.by = "Inflammation_State") + 
+  ggtitle("PCA 1 vs 2: Colored by Inflammation State")
+
+# D. PCA Plot colored by Sample ID (Batch Check)
+p_batch <- DimPlot(seurat.integrated, 
+                   reduction = "pca", 
+                   dims = c(1, 2), 
+                   group.by = "Sample_ID") + 
+  ggtitle("PCA 1 vs 2: Colored by Sample ID")
+
+# Display plots
+print((p_tissue + p_disease) / (p_inflam + p_batch)) 
+```
+
+![](plot-39.png)
+
+### Visualize Gene Loadings on PCA
+
+This plot helps you understand *which genes* contribute most to the definition of each Principal Component (PC).
+
+```{r}
+# ----------------------------------------------------
+# 10.1 Visualize Gene Loadings (Heatmap)
+# ----------------------------------------------------
+cat("10.1 Generating Heatmap of top 10 contributing genes for PC1 and PC2...\n")
+
+# This shows the expression pattern of the top 10 genes that define each of the first few PCs.
+print(
+  DimHeatmap(seurat.integrated, 
+             dims = 1:6, 
+             cells = 500, # Show 500 random cells for speed
+             balanced = TRUE, # Show genes highly positive and highly negative
+             assays = "integrated")
+)
+# 
+
+cat("Visualizations complete. You can now confidently select the PCs for Step 6.\n")
+```
+
+![](plot-40.png)
+
+## Extract PCA Contribution and Eigenvalues
+
+The explained variance for each PC is stored directly within the Seurat object's PCA slot.
+
+```{r}
+# Assuming your integrated and PCA-run object is named 'seurat.integrated'
+
+# ----------------------------------------------------
+# 11.1 Extract Variance Explained (Contribution)
+# ----------------------------------------------------
+
+# Get the standard deviation for each PC
+pca_stdev <- Stdev(seurat.integrated, reduction = "pca")
+
+# Calculate the variance (standard deviation squared)
+pca_variance <- (pca_stdev)^2
+
+# Calculate the percentage of variance explained by each PC
+pca_contributions <- pca_variance / sum(pca_variance) * 100
+
+# Convert to a data frame for easier inspection and plotting
+pca_summary <- data.frame(
+  PC = 1:length(pca_contributions),
+  StDev = pca_stdev,
+  Variance = pca_variance,
+  Contribution_Percent = pca_contributions
+)
+
+# Print the top 10 PCs' contributions
+cat("--- Top 10 Principal Component Contributions ---\n")
+print(head(pca_summary, 20))
+
+# ----------------------------------------------------
+# 11.2 Calculate and Display Eigenvalues
+# ----------------------------------------------------
+# In PCA, the Eigenvalue is simply the variance explained by that PC.
+# (The Eigenvalue of a correlation matrix is its variance).
+
+cat("\n--- Eigenvalues (Variance) ---\n")
+# The 'Variance' column in the summary table is the Eigenvalue
+eigenvalues_table <- pca_summary %>%
+  select(PC, Eigenvalue = Variance)
+
+print(head(eigenvalues_table, 20))
+```
+
+``` r
+--- Top 10 Principal Component Contributions ---
+   PC     StDev   Variance Contribution_Percent
+1   1 13.679809 187.137177           29.5826999
+2   2 10.388224 107.915189           17.0592648
+3   3  6.347605  40.292093            6.3693859
+4   4  5.957799  35.495365            5.6111178
+5   5  5.579818  31.134366            4.9217296
+6   6  5.138368  26.402829            4.1737669
+7   7  4.782101  22.868487            3.6150572
+8   8  4.134261  17.092113            2.7019262
+9   9  3.562752  12.693202            2.0065451
+10 10  3.556544  12.649007            1.9995588
+11 11  3.058539   9.354662            1.4787877
+12 12  2.892971   8.369284            1.3230188
+13 13  2.608940   6.806566            1.0759840
+14 14  2.518893   6.344821            1.0029912
+15 15  2.406718   5.792293            0.9156474
+16 16  2.283759   5.215553            0.8244762
+17 17  2.207877   4.874723            0.7705976
+18 18  2.158484   4.659051            0.7365042
+19 19  2.118615   4.488531            0.7095483
+20 20  2.102177   4.419147            0.6985800
+
+--- Eigenvalues (Variance) ---
+   PC Eigenvalue
+1   1 187.137177
+2   2 107.915189
+3   3  40.292093
+4   4  35.495365
+5   5  31.134366
+6   6  26.402829
+7   7  22.868487
+8   8  17.092113
+9   9  12.693202
+10 10  12.649007
+11 11   9.354662
+12 12   8.369284
+13 13   6.806566
+14 14   6.344821
+15 15   5.792293
+16 16   5.215553
+17 17   4.874723
+18 18   4.659051
+19 19   4.488531
+20 20   4.419147
+```
+
+### Step 6: Determine Dimensionality and Run UMAP/Clustering
+
+You must choose the number of relevant Principal Components (PCs) based on the Elbow Plot. We'll use this subset of PCs for the rest of the analysis.
+
+```{r}
+# ----------------------------------------------------
+# 6. Determine Dimensionality, Find Clusters, and Run UMAP
+# ----------------------------------------------------
+
+# 6.1 Determine Dimensionality
+# Based on common scRNA-seq standards and the expected Elbow Plot, 
+# we'll start with 30 PCs. You should inspect the elbow plot and adjust this number.
+# If you used 20 PCs for integration, sticking close to that range (e.g., 20-30) is reasonable.
+npcs_to_use <- 16 # Adjust based on your ElbowPlot analysis
+
+cat(paste("6.2 Using the first", npcs_to_use, "PCs for clustering and UMAP...\n"))
+
+# 6.3 Find Nearest Neighbors (Graph Construction)
+# Build a graph representing cell-to-cell similarity based on the selected PCs.
+seurat.integrated <- FindNeighbors(seurat.integrated, dims = 1:npcs_to_use)
+
+# 6.4 Find Clusters
+# Apply the Louvain/Leiden algorithm to the graph to define cell populations.
+# Resolution controls the number of clusters (higher resolution = more clusters). 
+# 0.5 is a good starting point.
+seurat.integrated <- FindClusters(seurat.integrated, resolution = 0.5) 
+cat("Clustering complete.\n")
+
+# 6.5 Run UMAP (Visualization)
+# Run Non-linear dimensionality reduction to visualize the clusters in 2D.
+seurat.integrated <- RunUMAP(seurat.integrated, dims = 1:npcs_to_use)
+
+cat("UMAP computation complete. Object ready for visualization.\n")
+```
+
+``` r
+6.2 Using the first 12 PCs for clustering and UMAP...
+Computing nearest neighbor graph
+Computing SNN
+Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
+
+Number of nodes: 29821
+Number of edges: 1041659
+
+Running Louvain algorithm...
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+Maximum modularity in 10 random starts: 0.9368
+Number of communities: 20
+Elapsed time: 3 seconds
+Clustering complete.
+Warning: The default method for RunUMAP has changed from calling Python UMAP via reticulate to the R-native UWOT using the cosine metric
+To use Python UMAP via reticulate, set umap.method to 'umap-learn' and metric to 'correlation'
+This message will be shown once per session
+09:55:12 UMAP embedding parameters a = 0.9922 b = 1.112
+09:55:12 Read 29821 rows and found 12 numeric columns
+09:55:12 Using Annoy for neighbor search, n_neighbors = 30
+09:55:12 Building Annoy index with metric = cosine, n_trees = 50
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+09:55:14 Writing NN index file to temp file C:\Users\31435\AppData\Local\Temp\RtmpuSd0e7\filea48556e6971
+09:55:14 Searching Annoy index using 1 thread, search_k = 3000
+09:55:22 Annoy recall = 100%
+09:55:22 Commencing smooth kNN distance calibration using 1 thread with target n_neighbors = 30
+09:55:24 Initializing from normalized Laplacian + noise (using RSpectra)
+09:55:26 Commencing optimization for 200 epochs, with 1288774 positive edges
+09:55:26 Using rng type: pcg
+Using method 'umap'
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+09:55:49 Optimization finished
+UMAP computation complete. Object ready for visualization.
+```
+
+use 17 PC
+
+``` python
+cat("UMAP computation complete. Object ready for visualization.\n")
+6.2 Using the first 16 PCs for clustering and UMAP...
+Computing nearest neighbor graph
+Computing SNN
+Warning message:
+package ‘future’ was built under R version 4.5.1 
+Modularity Optimizer version 1.3.0 by Ludo Waltman and Nees Jan van Eck
+
+Number of nodes: 29821
+Number of edges: 1129340
+
+Running Louvain algorithm...
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+Maximum modularity in 10 random starts: 0.9367
+Number of communities: 21
+Elapsed time: 4 seconds
+Clustering complete.
+Warning: The default method for RunUMAP has changed from calling Python UMAP via reticulate to the R-native UWOT using the cosine metric
+To use Python UMAP via reticulate, set umap.method to 'umap-learn' and metric to 'correlation'
+This message will be shown once per session
+16:23:44 UMAP embedding parameters a = 0.9922 b = 1.112
+16:23:44 Read 29821 rows and found 16 numeric columns
+16:23:44 Using Annoy for neighbor search, n_neighbors = 30
+16:23:44 Building Annoy index with metric = cosine, n_trees = 50
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+16:23:46 Writing NN index file to temp file C:\Users\31435\AppData\Local\Temp\Rtmpu0vdeU\file4ce8312c585f
+16:23:46 Searching Annoy index using 1 thread, search_k = 3000
+16:23:54 Annoy recall = 100%
+16:23:55 Commencing smooth kNN distance calibration using 1 thread with target n_neighbors = 30
+16:23:56 Initializing from normalized Laplacian + noise (using RSpectra)
+16:23:59 Commencing optimization for 200 epochs, with 1331622 positive edges
+16:23:59 Using rng type: pcg
+Using method 'umap'
+0%   10   20   30   40   50   60   70   80   90   100%
+[----|----|----|----|----|----|----|----|----|----|
+**************************************************|
+16:24:24 Optimization finished
+UMAP computation complete. Object ready for visualization.
+```
+
+### Step 7: Visualize Clusters and Batch Effect Correction
+
+Before moving on, you must visually confirm two things: 1) the clusters are well-separated, and 2) the batch correction worked (samples are mixed within clusters).
+
+```{r}
+# ----------------------------------------------------
+# 7. Visualization
+# ----------------------------------------------------
+
+# Load the necessary library for combining plots
+library(patchwork) 
+
+cat("7.1 Generating UMAP visualizations...\n")
+
+# 7.1.1 UMAP colored by Cluster ID (Your main result)
+p_clusters <- DimPlot(seurat.integrated, 
+                      reduction = "umap", 
+                      label = TRUE, 
+                      repel = TRUE) + 
+  ggtitle("UMAP: Unsupervised Clusters (20 Communities)") +
+  labs(color = "Cluster")
+
+# 7.1.2 UMAP colored by Sample ID (Crucial Batch Check)
+# Cells within each cluster should be composed of multiple colors (samples)
+p_samples <- DimPlot(seurat.integrated, 
+                     reduction = "umap", 
+                     group.by = "Sample_ID") + 
+  ggtitle("UMAP: Sample ID (Batch Check)") +
+  labs(color = "Sample ID")
+
+# 7.1.3 UMAP colored by Key Biological Factors (Disease Status)
+p_disease <- DimPlot(seurat.integrated,
+                     reduction = "umap",
+                     group.by = "Disease_Status") +
+  ggtitle("UMAP: Colored by Disease Status") +
+  labs(color = "Disease Status")
+
+# Display the plots for visual inspection
+print((p_clusters + p_samples) / p_disease)
+
+cat("Visualizations complete. Inspect plots for cluster quality and mixing.\n")
+```
+
+![](plot-41.png)
+
+![](plot-101.png)
+
+------------------------------------------------------------------------
+
+# Annotation
+
+### Find Marker Genes for All Clusters
+
+Now we find the genes that are uniquely highly expressed in each of the 20 clusters.
+
+```{r}
+# ----------------------------------------------------
+# 8. Corrected Find Marker Genes
+# ----------------------------------------------------
+
+# 8.1 FIX: Join the RNA assay layers (Crucial step!)
+cat("8.1 Joining RNA assay layers from 13 samples...\n")
+DefaultAssay(seurat.integrated) <- "RNA"
+seurat.integrated <- JoinLayers(seurat.integrated, assay = "RNA")
+
+# Verify that the RNA assay is now normalized and scaled (if necessary for subsequent steps)
+# The normalization you ran previously should be preserved or rerun if necessary:
+seurat.integrated <- NormalizeData(seurat.integrated, assay = "RNA")
+cat("RNA assay layers joined and normalized.\n")
+
+# Set the cluster IDs as the current identity class
+Idents(seurat.integrated) <- "integrated_snn_res.0.5"
+
+cat("8.2 Finding positive marker genes for all 20 clusters (Corrected Attempt)...\n")
+# Finds genes enriched in each cluster compared to all other cells.
+cluster.markers <- FindAllMarkers(object = seurat.integrated, 
+                                  only.pos = TRUE, 
+                                  min.pct = 0.25, 
+                                  logfc.threshold = 0.25, 
+                                  verbose = FALSE)
+
+# 8.3 Save the marker table
+write.csv(cluster.markers, "E:/acode/wsl/data6/gz/integrated_rna_cluster_markers.csv", row.names = FALSE)
+
+# Check if markers were found
+if (nrow(cluster.markers) > 0) {
+    cat(paste("Success! Found", nrow(cluster.markers), "marker genes.\n"))
+} else {
+    cat("Warning: Marker finding still failed. Check QC and normalization steps.\n")
+}
+```
+
+``` r
+this warning was generated. 
+Success! Found 23000 marker genes.
+```
+
+``` python
+Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated. 
+Success! Found 24414 marker genes
+```
+
+### Top Marker Visualization (Heatmap)
+
+Now that you have the marker file, run the visualization step to confirm the cluster separation. This heatmap visually displays the uniqueness of the top genes for each of your 20 clusters.
+
+```{r}
+# Assuming 'cluster.markers' is still loaded in your environment
+# If not, you can reload it: cluster.markers <- #read.csv("integrated_rna_cluster_markers.csv")
+
+cat("9.1 Preparing heatmap visualization...\n")
+
+# 9.1 Filter for the top 5 unique markers per cluster
+top5_markers <- cluster.markers %>%
+  group_by(cluster) %>%
+  # Use 'top_n' or 'slice_max' to get the best markers by log2FC
+  slice_max(n = 5, order_by = avg_log2FC)
+
+# 9.2 Create a Heatmap of Top Markers
+# This visualizes the normalized expression of the selected genes across all clusters.
+# Note: Use the 'RNA' assay for visualization if the integrated assay is scaled, 
+# or ensure the integrated assay is scaled for proper plotting.
+# Since we are using FindAllMarkers on the RNA assay, it's safer to ensure we use RNA for the heatmap too.
+DefaultAssay(seurat.integrated) <- "RNA"
+
+print(
+  DoHeatmap(seurat.integrated, 
+            features = top5_markers$gene, 
+            group.by = "ident", 
+            label = TRUE,
+            size = 3) + # set size for label text
+    theme(axis.text.y = element_text(size = 6)) + # Smaller gene text
+    NoLegend() +
+    ggtitle("Top 5 Marker Genes per Cluster")
+)
+#
+```
+
+![](plot-42.png)
+
+![](plot-102.png)
+
+## Display and Save Top Marker List
+
+```{r}
+# Assuming 'cluster.markers' is loaded, which contains the results of FindAllMarkers.
+# If you closed R, reload the file:
+# cluster.markers <- read.csv("integrated_rna_cluster_markers.csv")
+
+# Load the tidyverse for data manipulation
+library(tidyverse)
+
+# ----------------------------------------------------
+# 13.1 Filter and Select Top 5 Markers per Cluster
+# ----------------------------------------------------
+
+# Group the markers by their cluster ID and select the top 5 genes
+# based on the average log2 fold-change (avg_log2FC), which indicates
+# the magnitude of enrichment in that cluster compared to all others.
+top5_markers_list <- cluster.markers %>%
+  group_by(cluster) %>%
+  slice_max(n = 5, order_by = avg_log2FC) %>%
+  # Select the most important columns for easy review
+  select(
+    Cluster_ID = cluster,
+    Rank = avg_log2FC, # Use logFC for ranking clarity
+    Gene = gene,
+    avg_log2FC,
+    pct.1, # Percentage of cells in the cluster expressing the gene
+    pct.2, # Percentage of cells in all other clusters expressing the gene
+    p_val_adj # Adjusted p-value (for significance)
+  )
+
+cat("--- Top 5 Marker Genes for Every Cluster ---\n")
+print(top5_markers_list)
+
+# ----------------------------------------------------
+# 13.2 Save the Top Marker List
+# ----------------------------------------------------
+
+# Save this clean list as a separate CSV file for easy access and manual annotation.
+write.csv(top5_markers_list, "top5_cluster_marker_genes.csv", row.names = FALSE)
+
+cat("\nFull list of top 5 marker genes for every cluster saved as 'top5_cluster_marker_genes.csv'.\n")
+```
+
+check
+
+``` r
+--- Top 5 Marker Genes for Every Cluster ---
+# A tibble: 100 × 6
+# Groups:   Cluster_ID [20]
+   Cluster_ID  Rank Gene      pct.1 pct.2 p_val_adj
+   <fct>      <dbl> <chr>     <dbl> <dbl>     <dbl>
+ 1 0           5.01 LINC01857 0.266 0.015         0
+ 2 0           4.37 VPREB3    0.459 0.029         0
+ 3 0           4.37 TCL1A     0.379 0.024         0
+ 4 0           4.34 CD24      0.321 0.017         0
+ 5 0           4.20 FCRLA     0.43  0.039         0
+ 6 1           4.43 GNLY      0.28  0.031         0
+ 7 1           4.33 XCL2      0.541 0.037         0
+ 8 1           4.33 NKG7      0.979 0.119         0
+ 9 1           4.21 KLRC2     0.371 0.024         0
+10 1           4.15 GZMH      0.735 0.059         0
+# ℹ 90 more rows
+```
+
+```{r}
+> print(n=105,top5_markers_list)
+# A tibble: 100 × 6
+# Groups:   Cluster_ID [20]
+    Cluster_ID  Rank Gene       pct.1 pct.2 p_val_adj
+    <fct>      <dbl> <chr>      <dbl> <dbl>     <dbl>
+  1 0           5.01 LINC01857  0.266 0.015 0        
+  2 0           4.37 VPREB3     0.459 0.029 0        
+  3 0           4.37 TCL1A      0.379 0.024 0        
+  4 0           4.34 CD24       0.321 0.017 0        
+  5 0           4.20 FCRLA      0.43  0.039 0        
+  6 1           4.43 GNLY       0.28  0.031 0        
+  7 1           4.33 XCL2       0.541 0.037 0        
+  8 1           4.33 NKG7       0.979 0.119 0        
+  9 1           4.21 KLRC2      0.371 0.024 0        
+ 10 1           4.15 GZMH       0.735 0.059 0        
+ 11 2           4.83 CD40LG     0.401 0.015 0        
+ 12 2           3.27 KLRB1      0.516 0.074 0        
+ 13 2           3.09 IL7R       0.893 0.146 0        
+ 14 2           3.02 CTLA4      0.275 0.051 0        
+ 15 2           2.91 ICOS       0.442 0.06  0        
+ 16 3           8.52 S100A12    0.553 0.005 0        
+ 17 3           8.21 S100A8     0.805 0.034 0        
+ 18 3           7.73 S100A9     0.834 0.038 0        
+ 19 3           7.21 AQP9       0.667 0.014 0        
+ 20 3           7.17 AC005280.2 0.377 0.006 0        
+ 21 4           8.27 IGKV1-9    0.333 0.056 0        
+ 22 4           7.88 IGKV3D-20  0.26  0.009 0        
+ 23 4           6.90 IGKV1-17   0.271 0.037 0        
+ 24 4           6.81 IGLV6-57   0.318 0.011 0        
+ 25 4           6.77 IGKV3-11   0.479 0.109 0        
+ 26 5           2.34 CD8B       0.553 0.113 0        
+ 27 5           2.34 GZMK       0.491 0.121 0        
+ 28 5           2.23 CD8A       0.683 0.137 0        
+ 29 5           2.09 GZMM       0.588 0.156 0        
+ 30 5           2.08 CCL5       0.95  0.251 0        
+ 31 6           4.28 BTBD11     0.252 0.042 0        
+ 32 6           4.01 APBA2      0.401 0.066 0        
+ 33 6           3.84 PRKCA      0.426 0.111 0        
+ 34 6           3.73 TXK        0.331 0.064 0        
+ 35 6           3.66 BICDL1     0.322 0.073 0        
+ 36 7           7.58 APOD       0.795 0.022 0        
+ 37 7           7.54 CPZ        0.316 0.002 0        
+ 38 7           7.35 PDGFRL     0.638 0.007 0        
+ 39 7           7.32 LUM        0.818 0.015 0        
+ 40 7           7.28 CXCL14     0.37  0.007 0        
+ 41 8           7.55 FOXS1      0.268 0.001 0        
+ 42 8           7.07 RERGL      0.917 0.015 0        
+ 43 8           6.81 TBX2-AS1   0.522 0.004 0        
+ 44 8           6.73 MUSTN1     0.945 0.027 0        
+ 45 8           6.69 OR51E1     0.299 0.002 0        
+ 46 9           4.92 LIX1-AS1   0.355 0.032 0        
+ 47 9           4.90 COL19A1    0.63  0.048 0        
+ 48 9           4.80 KHDRBS2    0.56  0.049 0        
+ 49 9           4.68 AFF3       0.968 0.215 0        
+ 50 9           4.53 LARGE1     0.615 0.1   0        
+ 51 10          8.43 LILRB5     0.319 0.002 0        
+ 52 10          6.89 SLCO2B1    0.478 0.008 0        
+ 53 10          6.81 C1QC       0.797 0.024 0        
+ 54 10          6.49 C1QB       0.749 0.023 0        
+ 55 10          6.43 FOLR2      0.509 0.018 0        
+ 56 11          6.87 CD1E       0.432 0.006 0        
+ 57 11          6.83 FCER1A     0.669 0.012 0        
+ 58 11          5.80 AL138899.1 0.256 0.005 0        
+ 59 11          5.73 AC092809.2 0.257 0.003 0        
+ 60 11          5.33 CYP2S1     0.386 0.008 0        
+ 61 12          7.00 RGS6       0.433 0.032 0        
+ 62 12          6.61 CACNA1C    0.64  0.039 0        
+ 63 12          6.57 PRKG1      0.879 0.08  0        
+ 64 12          6.54 ADGRL3     0.341 0.019 0        
+ 65 12          6.49 CACNB2     0.452 0.022 0        
+ 66 13          6.37 DCC        0.31  0.027 4.98e-298
+ 67 13          5.84 ACOXL      0.27  0.02  5.17e-304
+ 68 13          5.67 ZNF215     0.383 0.029 0        
+ 69 13          5.38 BMP6       0.385 0.035 0        
+ 70 13          4.88 TMC3-AS1   0.312 0.023 0        
+ 71 14          8.49 PKMYT1     0.337 0.001 0        
+ 72 14          8.06 RRM2       0.601 0.005 0        
+ 73 14          8.04 DLGAP5     0.274 0.001 0        
+ 74 14          7.91 UBE2C      0.41  0.003 0        
+ 75 14          7.86 AURKB      0.368 0.002 0        
+ 76 15          2.99 LINC01781  0.318 0.041 3.72e-164
+ 77 15          2.68 CD24       0.364 0.054 3.50e-161
+ 78 15          2.45 CPNE5      0.327 0.091 1.07e- 64
+ 79 15          2.32 TNFRSF13B  0.311 0.07  4.62e- 81
+ 80 15          2.25 FCRLA      0.416 0.087 1.77e-118
+ 81 16         11.5  ARHGEF15   0.272 0     0        
+ 82 16         10.8  SLCO2A1    0.332 0     0        
+ 83 16         10.7  RAMP3      0.48  0.001 0        
+ 84 16         10.7  PLVAP      0.431 0.004 0        
+ 85 16         10.6  CDH5       0.567 0.001 0        
+ 86 17          9.85 GFRA3      0.748 0.001 0        
+ 87 17          9.72 LRRTM1     0.508 0.001 0        
+ 88 17          9.59 FOXD3      0.311 0     0        
+ 89 17          9.53 PLP1       0.811 0.003 0        
+ 90 17          9.48 FOXD3-AS1  0.469 0.001 0        
+ 91 18         13.3  NCCRP1     0.683 0     0        
+ 92 18         10.2  AOC1       0.414 0.001 0        
+ 93 18          9.83 LAD1       0.655 0.001 0        
+ 94 18          9.80 CCL22      0.372 0.004 0        
+ 95 18          9.54 CCL17      0.338 0.002 0        
+ 96 19         11.3  SHD        0.276 0     0        
+ 97 19         11.2  LRRC26     0.716 0.001 0        
+ 98 19         11.1  KRT5       0.345 0     0        
+ 99 19         11.1  AC097375.1 0.517 0     0        
+100 19         11.0  AL513493.1 0.267 0     0  
+
+```
+
+| Cluster_ID集群 ID | Top 5 marker 基因 | 推断细胞类型 |
+|------------------------|------------------------|------------------------|
+| 0 | LINC01857, VPREB3, TCL1A, CD24, FCRLA | B-细胞系 (可能为前体 / 记忆 B 细胞) |
+| 1 | GNLY, XCL2, NKG7, KLRC2, GZMH | NK 细胞或活化细胞毒性 T 细胞 |
+| 2 | CD40LG, KLRB1, IL7R, CTLA4, ICOS | 活化 T 细胞 (辅助 T 细胞／记忆 T 细胞) |
+| 3 | S100A12, S100A8, S100A9, AQP9, AC005280.2 | 中性粒细胞／髓系炎症细胞 |
+| 4 | IGKV1-9, IGKV3D-20, IGKV1-17, IGLV6-57, IGKV3-11 | B 细胞 (免疫球蛋白轻链 V 区表达) |
+| 5 | CD8B, GZMK, CD8A, GZMM, CCL5C | CD8⁺ T 细胞 (细胞毒性 T 细胞) |
+| 6 | BTBD11, APBA2, PRKCA, TXK, BICDL1 | 未典型／可能为 T 细胞或髓系未分化细胞 (需进一步验证) |
+| 7 | APOD, CPZ, PDGFRL, LUM, CXCL14 | 间质细胞／成纤维细胞样 (stromal) 或血管相关细胞 |
+| 8 | FOXS1, RERGL, TBX2-AS1, MUSTN1, OR51E1 | 非经典免疫细胞 (可能为上皮或间质细胞) |
+| 9 | LIX1-AS1, COL19A1, KHDRBS2, AFF3, LARGE1 | 组织基质细胞或上皮／间质混合细胞 |
+| 10 | LILRB5, SLCO2B1, C1QC, C1QB, FOLR2 | 单核／巨噬细胞系 (补体相关表达) |
+| 11 | CD1E, FCER1A, AL138899.1, AC092809.2, CYP2S1 | 树突状细胞/DC 或肥大细胞/过敏相关免疫细胞 |
+| 12 | RGS6, CACNA1C, PRKG1, ADGRL3, CACNB2 | 神经／平滑肌相关细胞 (可能为血管壁细胞) |
+| 13 | DCC, ACOXL, ZNF215, BMP6, TMC3-AS1 | 发育相关／上皮或肠道上皮样细胞 |
+| 14 | PKMYT1, RRM2, DLGAP5, UBE2C, AURKB | 增殖活跃细胞 (可能为上皮细胞群) |
+| 15 | LINC01781, CD24, CPNE5, TNFRSF13B, FCRLA | B 细胞或浆细胞前体 (免疫球蛋白产生相关) |
+| 16 | ARHGEF15, SLCO2A1, RAMP3, PLVAP, CDH5 | 血管内皮细胞／血管相关细胞 |
+| 17 | GFRA3, LRRTM1, FOXD3, PLP1, FOXD3-AS1 | 神经鞘或神经系细胞 (可能为神经/胶质细胞) |
+| 18 | NCCRP1, AOC1, LAD1, CCL22, CCL17 | 淋巴/趋化相关细胞 (可能为树突状细胞或组织驻留免疫细胞) |
+| 19 | SHD, LRRC26, KRT5, AC097375.1, AL513493.1 | 上皮细胞 (可能为基底上皮/角化细胞) |
+
+``` python
+Cluster_ID  Rank Gene       pct.1 pct.2 p_val_adj
+    <fct>      <dbl> <chr>      <dbl> <dbl>     <dbl>
+  1 0           5.41 LINC01857  0.269 0.013 0        
+  2 0           4.61 TCL1A      0.388 0.021 0        
+  3 0           4.60 VPREB3     0.462 0.027 0        
+  4 0           4.48 FCER2      0.538 0.038 0        
+  5 0           4.48 CD24       0.319 0.015 0        
+  6 1           4.53 NKG7       0.979 0.112 0        
+  7 1           4.50 GNLY       0.27  0.03  0        
+  8 1           4.47 XCL2       0.524 0.036 0        
+  9 1           4.35 GZMH       0.731 0.054 0        
+ 10 1           4.23 KLRC2      0.358 0.023 0        
+ 11 2           4.67 CD40LG     0.424 0.017 0        
+ 12 2           3.36 KLRB1      0.55  0.075 0        
+ 13 2           2.94 IL7R       0.902 0.153 0        
+ 14 2           2.65 PRKCQ-AS1  0.339 0.053 0        
+ 15 2           2.51 CTLA4      0.263 0.054 0        
+ 16 3           8.72 S100A12    0.601 0.006 0        
+ 17 3           8.17 S100A8     0.821 0.04  0        
+ 18 3           7.51 S100A9     0.834 0.046 0        
+ 19 3           7.33 SERPINB2   0.284 0.005 0        
+ 20 3           6.99 MCEMP1     0.272 0.005 0        
+ 21 4           7.97 IGKV1-9    0.341 0.057 0        
+ 22 4           7.80 IGKV3D-20  0.272 0.01  0        
+ 23 4           6.49 IGKV3-11   0.493 0.111 0        
+ 24 4           6.42 IGKV1-12   0.257 0.033 0        
+ 25 4           6.42 IGKV1-17   0.279 0.039 0        
+ 26 5           4.48 BTBD11     0.257 0.04  0        
+ 27 5           4.09 TXK        0.347 0.059 0        
+ 28 5           4.00 APBA2      0.375 0.064 0        
+ 29 5           3.89 PRKCA      0.419 0.108 0        
+ 30 5           3.83 LEF1       0.305 0.064 0        
+ 31 6           7.72 APOD       0.795 0.021 0        
+ 32 6           7.64 CPZ        0.315 0.002 0        
+ 33 6           7.56 LUM        0.818 0.014 0        
+ 34 6           7.48 PDGFRL     0.638 0.006 0        
+ 35 6           7.36 DCN        0.866 0.036 0        
+ 36 7           2.29 CD8B       0.558 0.117 0        
+ 37 7           2.20 CD8A       0.692 0.142 0        
+ 38 7           2.13 GZMK       0.453 0.127 9.76e-300
+ 39 7           2.03 LYAR       0.377 0.143 6.11e-162
+ 40 7           2.02 LINC01871  0.491 0.143 2.66e-310
+ 41 8           7.62 FOXS1      0.268 0.001 0        
+ 42 8           7.18 RERGL      0.919 0.014 0        
+ 43 8           6.82 MUSTN1     0.95  0.026 0        
+ 44 8           6.81 TBX2-AS1   0.523 0.004 0        
+ 45 8           6.78 PLN        0.897 0.012 0        
+ 46 9           4.95 LIX1-AS1   0.364 0.034 0        
+ 47 9           4.80 COL19A1    0.627 0.051 0        
+ 48 9           4.79 KHDRBS2    0.562 0.052 0        
+ 49 9           4.71 AFF3       0.966 0.22  0        
+ 50 9           4.59 LARGE1     0.63  0.102 0        
+ 51 10          8.17 LILRB5     0.293 0.002 0        
+ 52 10          7.06 SLCO2B1    0.458 0.007 0        
+ 53 10          7.03 C1QC       0.78  0.022 0        
+ 54 10          6.75 C1QB       0.745 0.021 0        
+ 55 10          6.42 C1QA       0.805 0.034 0        
+ 56 11          6.35 DCC        0.327 0.024 0        
+ 57 11          5.58 ZNF215     0.366 0.027 0        
+ 58 11          5.17 BMP6       0.376 0.032 0        
+ 59 11          4.88 IGLC3      0.311 0.069 5.14e-142
+ 60 11          4.83 TMC3-AS1   0.284 0.022 0        
+ 61 12          6.91 FCER1A     0.724 0.013 0        
+ 62 12          6.85 CD1E       0.46  0.006 0        
+ 63 12          5.95 AL138899.1 0.266 0.006 0        
+ 64 12          5.83 AC092809.2 0.284 0.003 0        
+ 65 12          5.38 CD1C       0.781 0.051 0        
+ 66 13          7.02 RGS6       0.415 0.033 0        
+ 67 13          6.59 CACNA1C    0.648 0.04  0        
+ 68 13          6.58 PRKG1      0.901 0.081 0        
+ 69 13          6.48 MEG8       0.283 0.013 0        
+ 70 13          6.46 ADGRL3     0.322 0.02  0        
+ 71 14          8.48 PKMYT1     0.336 0.001 0        
+ 72 14          8.08 RRM2       0.601 0.005 0        
+ 73 14          8.04 DLGAP5     0.273 0.001 0        
+ 74 14          7.90 UBE2C      0.409 0.003 0        
+ 75 14          7.80 AURKB      0.365 0.002 0        
+ 76 15          2.99 LINC01781  0.324 0.041 8.57e-173
+ 77 15          2.71 CD24       0.367 0.053 2.50e-166
+ 78 15          2.42 CPNE5      0.326 0.091 1.13e- 64
+ 79 15          2.36 TNFRSF13B  0.319 0.069 1.57e- 87
+ 80 15          2.31 FCRLA      0.43  0.087 1.36e-130
+ 81 16         11.5  ARHGEF15   0.273 0     0        
+ 82 16         10.8  SLCO2A1    0.333 0     0        
+ 83 16         10.7  RAMP3      0.479 0.001 0        
+ 84 16         10.7  PLVAP      0.429 0.004 0        
+ 85 16         10.6  CDH5       0.568 0.001 0        
+ 86 17          9.38 LYPD2      0.251 0.001 0        
+ 87 17          7.74 AC104809.2 0.399 0.002 0        
+ 88 17          6.08 AC020651.2 0.446 0.007 0        
+ 89 17          5.89 FCGR3A     0.926 0.037 0        
+ 90 17          5.84 SMIM25     0.934 0.05  0        
+ 91 18         12.0  SLC5A7     0.309 0     0        
+ 92 18         12.0  FOXD3      0.344 0     0        
+ 93 18         11.9  LRRTM1     0.553 0     0        
+ 94 18         11.5  GFRA3      0.813 0     0        
+ 95 18         11.5  PLP1       0.901 0.002 0        
+ 96 19         13.6  NCCRP1     0.685 0     0        
+ 97 19         10.2  AOC1       0.411 0.001 0        
+ 98 19          9.82 LAD1       0.651 0.001 0        
+ 99 19          9.79 CCL22      0.37  0.004 0        
+100 19          9.54 CCL17      0.349 0.002 0        
+101 20         13.3  AC097375.1 0.517 0     0        
+102 20         12.3  LRRC26     0.72  0     0        
+103 20         11.3  SHD        0.271 0     0        
+104 20         11.1  KRT5       0.339 0     0        
+105 20         11.0  AL513493.1 0.263 0     0    
+```
+
+# Cluster Cell Type Identification
+
+-   **Cluster 0:** *Naïve B cells (transitional B)* – Markers include TCL1A, FCER2 (CD23), CD24 and VPREB3, all associated with B lymphocytes. For example, CD23 (FCER2) is expressed on mature B cells[[en.wikipedia.org]{.underline}](https://en.wikipedia.org/wiki/CD23#:~:text=receptor%20%20for%20%20155%2C,163%2C%20and%20platelets){alt="https://en.wikipedia.org/wiki/CD23#:~:text=receptor%20%20for%20%20155%2C,163%2C%20and%20platelets"} and CD24 is a well-known marker of B-cell development[[frontiersin.org]{.underline}](https://www.frontiersin.org/journals/immunology/articles/10.3389/fimmu.2018.02421/full#:~:text=In%20the%20peripheral%20lymphoid%20system,are%20a%20distinctive%20population%20of){alt="https://www.frontiersin.org/journals/immunology/articles/10.3389/fimmu.2018.02421/full#:~:text=In%20the%20peripheral%20lymphoid%20system,are%20a%20distinctive%20population%20of"}. Moreover, single-cell data show TCL1A is highly expressed in naïve B cells[[pubmed.ncbi.nlm.nih.gov]{.underline}](https://pubmed.ncbi.nlm.nih.gov/39946833/#:~:text=Findings%3A%20%20Using%20single,based%20nanomedicine){alt="https://pubmed.ncbi.nlm.nih.gov/39946833/#:~:text=Findings%3A%20%20Using%20single,based%20nanomedicine"}. These genes together indicate cluster 0 is a B-cell population (likely naïve/transitional B cells).
+
+-   
+
+-   **Cluster 1:** *Cytotoxic lymphocytes (NK cells)* – Genes such as NKG7, GNLY, GZMH, and KLRC2 (NKG2C) are characteristic of innate cytotoxic cells. NKG7 is a pan-cytotoxicity marker, highly expressed in NK cells and CD8 T cells[[pubmed.ncbi.nlm.nih.gov]{.underline}](https://pubmed.ncbi.nlm.nih.gov/40538191/#:~:text=understood,reliable%20indicator%20of%20cytotoxic%20functionality){alt="https://pubmed.ncbi.nlm.nih.gov/40538191/#:~:text=understood,reliable%20indicator%20of%20cytotoxic%20functionality"}. Importantly, KLRC2 (NKG2C) is primarily expressed on NK cells[[ncbi.nlm.nih.gov]{.underline}](https://www.ncbi.nlm.nih.gov/gene/3822#:~:text=Natural%20killer%20,complex%2C%20a%20region%20that%20contains){alt="https://www.ncbi.nlm.nih.gov/gene/3822#:~:text=Natural%20killer%20,complex%2C%20a%20region%20that%20contains"}. The combination of these markers (plus XCL2) strongly suggests cluster 1 consists of natural killer (NK) cells or similar cytotoxic innate lymphocytes.
+
+    **Cluster 2:** *CD4\<sup\>+\</sup\> T cells (helper/regulatory T)* – Key markers include CD40LG (CD154), IL7R, CTLA4 and KLRB1. CD40LG is predominantly expressed on activated CD4\<sup\>+\</sup\> helper T cells[[en.wikipedia.org]{.underline}](https://en.wikipedia.org/wiki/CD154#:~:text=CD40%20ligand%20,haematopoietic%20cells%20%28smooth%20muscle%20cells){alt="https://en.wikipedia.org/wiki/CD154#:~:text=CD40%20ligand%20,haematopoietic%20cells%20%28smooth%20muscle%20cells"}. IL7R (CD127) and CTLA4 are also T-cell markers. The presence of CD40L and CTLA4 indicates these are CD4\<sup\>+\</sup\> T cells (likely helper or regulatory T-cell subsets)[[en.wikipedia.org]{.underline}](https://en.wikipedia.org/wiki/CD154#:~:text=CD40%20ligand%20,haematopoietic%20cells%20%28smooth%20muscle%20cells){alt="https://en.wikipedia.org/wiki/CD154#:~:text=CD40%20ligand%20,haematopoietic%20cells%20%28smooth%20muscle%20cells"}.
+
+    **Cluster 3:** *Neutrophils* – Strong expression of S100A8, S100A9, and S100A12 points to neutrophils. Indeed, S100A8/A9 are abundant neutrophil proteins (making up ≈40% of neutrophil cytosol[[researchgate.net]{.underline}](https://www.researchgate.net/publication/357755938_S100A8A9_Is_a_Marker_for_the_Release_of_Neutrophil_Extracellular_Traps_and_Induces_Neutrophil_Activation#:~:text=the%20%EF%AC%81rst%20cells%20recruited%20to,half%20of%20the%20intracellular%20protein){alt="https://www.researchgate.net/publication/357755938_S100A8A9_Is_a_Marker_for_the_Release_of_Neutrophil_Extracellular_Traps_and_Induces_Neutrophil_Activation#:~:text=the%20%EF%AC%81rst%20cells%20recruited%20to,half%20of%20the%20intracellular%20protein"}) and S100A12 is likewise produced by neutrophils during inflammation. These “calprotectin” proteins drive neutrophil recruitment. Thus cluster 3 corresponds to neutrophils in the intestinal tissue.
+
+    **Cluster 4:** *Plasma B cells (antibody-secreting B cells)* – The top genes are immunoglobulin kappa light-chain variable-region genes (IGKV1-9, IGKV3-11, etc.). These immunoglobulin transcripts are signatures of antibody-secreting B cells. In humans, plasma cells produce high levels of immunoglobulin heavy and light chains[[genecards.org]{.underline}](https://www.genecards.org/cgi-bin/carddisp.pl?gene=IGKV1-12#:~:text=V%20region%20of%20the%20variable,the%20elimination%20of%20bound%20antigens){alt="https://www.genecards.org/cgi-bin/carddisp.pl?gene=IGKV1-12#:~:text=V%20region%20of%20the%20variable,the%20elimination%20of%20bound%20antigens"}. Therefore, cluster 4 represents plasma (or plasmablast) B cells actively producing immunoglobulin.
+
+    **Cluster 5:** *T cells (likely Th1-skewed CD4\<sup\>+\</sup\> T cells)* – Markers such as TXK and LEF1 suggest a T-cell lineage. TXK is a T-cell–specific tyrosine kinase involved in IFN-γ production by Th1 cells[[genecards.org]{.underline}](https://www.genecards.org/cgi-bin/carddisp.pl?gene=TXK#:~:text=UniProtKB%2FSwiss){alt="https://www.genecards.org/cgi-bin/carddisp.pl?gene=TXK#:~:text=UniProtKB%2FSwiss"}, and LEF1 is a transcription factor in lymphocytes. Though not definitive by one gene, the T-cell–associated TXK and LEF1 indicate cluster 5 is a T lymphocyte subset (likely CD4\<sup\>+\</sup\> helper T cells with Th1 features)[[genecards.org]{.underline}](https://www.genecards.org/cgi-bin/carddisp.pl?gene=TXK#:~:text=UniProtKB%2FSwiss){alt="https://www.genecards.org/cgi-bin/carddisp.pl?gene=TXK#:~:text=UniProtKB%2FSwiss"}.
+
+    **Cluster 6:** *Fibroblasts (stromal cells)* – This cluster’s top genes include LUM (lumican) and DCN (decorin), which are small leucine-rich proteoglycans secreted by fibroblasts. Indeed, LUM and DCN are established pan-fibroblast markers[[patents.google.com]{.underline}](https://patents.google.com/patent/EP3728565A1/ep=#:~:text=small%20leucine,DCN%20decorin){alt="https://patents.google.com/patent/EP3728565A1/ep=#:~:text=small%20leucine,DCN%20decorin"}. The presence of other extracellular matrix genes (APOD, PDGFRL) reinforces that cluster 6 is fibroblastic stromal cells in the gut.
+
+    **Cluster 7:** *CD8\<sup\>+\</sup\> cytotoxic T lymphocytes* – This cluster uniquely expresses CD8A and CD8B along with granzyme K (GZMK), identifying it as CD8\<sup\>+\</sup\> T cells. The CD8 co-receptor (CD8A/B) is the hallmark of cytotoxic T cells[[en.wikipedia.org]{.underline}](https://en.wikipedia.org/wiki/CD8#:~:text=The%20CD8%20co,pigmented%20%20105.%5B%205){alt="https://en.wikipedia.org/wiki/CD8#:~:text=The%20CD8%20co,pigmented%20%20105.%5B%205"}. Thus cluster 7 corresponds to CD8\<sup\>+\</sup\> cytotoxic T lymphocytes.
+
+    **Cluster 8:** *Smooth muscle cells* – Genes such as MUSTN1 and PLN are specific to muscle tissue. MUSTN1 is secreted by smooth muscle cells[[pubmed.ncbi.nlm.nih.gov]{.underline}](https://pubmed.ncbi.nlm.nih.gov/38458566/#:~:text=Results%3A%20%20We%20show%20that,body){alt="https://pubmed.ncbi.nlm.nih.gov/38458566/#:~:text=Results%3A%20%20We%20show%20that,body"} and phospholamban (PLN) regulates muscle contractility. The enrichment of smooth-muscle–related markers indicates cluster 8 is composed of intestinal smooth muscle cells (likely from the muscularis layer).
+
+    **Cluster 9:** *Mesenchymal (immature smooth muscle/mesenchyme)* – Markers like LIX1-AS1 (linked to LIX1, a marker of immature gut mesenchyme[[pubmed.ncbi.nlm.nih.gov]{.underline}](https://pubmed.ncbi.nlm.nih.gov/32633461/#:~:text=,data%20highlight%20LIX1%20role%20in){alt="https://pubmed.ncbi.nlm.nih.gov/32633461/#:~:text=,data%20highlight%20LIX1%20role%20in"}) and COL19A1 (a collagen) suggest a mesenchymal lineage. LIX1 is known as a marker of digestive mesenchyme immaturity[[pubmed.ncbi.nlm.nih.gov]{.underline}](https://pubmed.ncbi.nlm.nih.gov/32633461/#:~:text=,data%20highlight%20LIX1%20role%20in){alt="https://pubmed.ncbi.nlm.nih.gov/32633461/#:~:text=,data%20highlight%20LIX1%20role%20in"}, implying these cells are progenitor mesenchymal (possibly immature smooth muscle or fibroblast) cells.
+
+    **Cluster 10:** *Tissue macrophages* – High expression of complement C1Q genes (C1QA, C1QB, C1QC) and LILRB5 is characteristic of macrophages. C1q is made almost exclusively by macrophages (and immature DCs)[[nature.com]{.underline}](https://www.nature.com/articles/s41467-017-01711-0?error=cookies_not_supported&code=5a6f7434-ce9e-456f-bb4d-f9a0a819e1a9#:~:text=restricted%20primarily%20to%20macrophages%20and,expressed%20by%20hepatocytes%20in%20the){alt="https://www.nature.com/articles/s41467-017-01711-0?error=cookies_not_supported&code=5a6f7434-ce9e-456f-bb4d-f9a0a819e1a9#:~:text=restricted%20primarily%20to%20macrophages%20and,expressed%20by%20hepatocytes%20in%20the"}. This cluster matches the profile of resident/tissue macrophages (often M2-like) in the gut.
+
+    **Cluster 11:** *Plasma B cells or activated B cells* – The presence of IGLC3 (immunoglobulin lambda constant 3) indicates immunoglobulin production. Although DCC and BMP6 are unusual here, the immunoglobulin gene suggests a B-cell (plasmacytic) identity. Like cluster 4, this cluster likely represents antibody-secreting B cells (plasma cells)[[genecards.org]{.underline}](https://www.genecards.org/cgi-bin/carddisp.pl?gene=IGKV1-12#:~:text=V%20region%20of%20the%20variable,the%20elimination%20of%20bound%20antigens){alt="https://www.genecards.org/cgi-bin/carddisp.pl?gene=IGKV1-12#:~:text=V%20region%20of%20the%20variable,the%20elimination%20of%20bound%20antigens"}.
+
+    **Cluster 12:** *Dendritic cells (conventional DC)* – Markers include CD1C and FCER1A, both dendritic cell markers. CD1C is a canonical marker of human conventional type-2 dendritic cells (cDC2)[[biocompare.com]{.underline}](https://www.biocompare.com/Editorial-Articles/572982-Dendritic-Cell-Markers/#:~:text=intestine%20and%20maintaining%20tolerance%20in,CD207%2C%20ITGAM%2C%20NOTCH2%2C%20and%20SIRPA){alt="https://www.biocompare.com/Editorial-Articles/572982-Dendritic-Cell-Markers/#:~:text=intestine%20and%20maintaining%20tolerance%20in,CD207%2C%20ITGAM%2C%20NOTCH2%2C%20and%20SIRPA"}. FCER1A (the α chain of FcεRI) is also expressed on a subset of DCs. Together these indicate cluster 12 is conventional myeloid dendritic cells.
+
+    **Cluster 13:** *Neuronal cells (enteric neurons)* – Genes like CACNA1C (L-type Ca\<sup\>2+\</sup\> channel) and ADGRL3 (latrophilin-3) are neuron-associated. While we did not find a direct citation here, these genes are typically expressed in neural tissues. Thus cluster 13 likely represents enteric neurons of the gut wall.
+
+    **Cluster 14:** *Proliferating cells* – This cluster is defined by cell-cycle genes (UBE2C, AURKB, PKMYT1, RRM2) rather than lineage markers. These genes are well-known mitotic regulators (e.g. Aurora kinase B is an indicator of cell division[[frontiersin.org]{.underline}](https://www.frontiersin.org/journals/cell-and-developmental-biology/articles/10.3389/fcell.2020.570252/full#:~:text=cell%20finally%20splits%20into%20two,regeneration%2C%20the%20cytokinesis%20time%20of){alt="https://www.frontiersin.org/journals/cell-and-developmental-biology/articles/10.3389/fcell.2020.570252/full#:~:text=cell%20finally%20splits%20into%20two,regeneration%2C%20the%20cytokinesis%20time%20of"}). Hence cluster 14 likely comprises actively cycling cells (of various types) in mitosis.
+
+    **Cluster 15:** *B cells (memory or transitional)* – Markers include CD24, TNFRSF13B (BAFF-receptor), and FCRLA, which are B-cell–specific. CD24 is expressed on developing B cells and memory B cells[[frontiersin.org]{.underline}](https://www.frontiersin.org/journals/immunology/articles/10.3389/fimmu.2018.02421/full#:~:text=In%20the%20peripheral%20lymphoid%20system,the%20changes%20in%20CD24%20expression){alt="https://www.frontiersin.org/journals/immunology/articles/10.3389/fimmu.2018.02421/full#:~:text=In%20the%20peripheral%20lymphoid%20system,the%20changes%20in%20CD24%20expression"}. TNFRSF13B and FCRLA also mark B cells. Thus cluster 15 represents another B-lymphocyte subset.
+
+    **Cluster 16:** *Endothelial cells* – Genes such as CDH5 (VE-cadherin) and PLVAP are definitive markers of vascular endothelium. Cadherin-5 (VE-cadherin, encoded by CDH5) is an endothelial adhesion protein[[en.wikipedia.org]{.underline}](https://en.wikipedia.org/wiki/VE-cadherin#:~:text=Cadherin,5){alt="https://en.wikipedia.org/wiki/VE-cadherin#:~:text=Cadherin,5"}, and PLVAP (plasmalemma vesicle protein) is specific to endothelium. These indicate cluster 16 is blood vessel endothelial cells.
+
+    **Cluster 17:** *CD16\<sup\>+\</sup\> monocytes (non-classical)* – High FCGR3A (CD16) with low CD14 suggests non-classical (“patrolling”) monocytes. In humans, non-classical monocytes are CD14\^low CD16\^high[[biocompare.com]{.underline}](https://www.biocompare.com/Editorial-Articles/567890-A-Guide-to-Monocyte-Markers/#:~:text=Non,Other%20markers%20include){alt="https://www.biocompare.com/Editorial-Articles/567890-A-Guide-to-Monocyte-Markers/#:~:text=Non,Other%20markers%20include"}. The presence of FCGR3A (CD16) as a top marker places this cluster in the CD16\^+ monocyte lineage.
+
+    **Cluster 18:** *Glial/Schwann cells* – Markers include PLP1 (myelin protein) and GFRA3. GFRA3 (GDNF receptor α3) is prominently expressed by Schwann cells (peripheral glia)[[pubmed.ncbi.nlm.nih.gov]{.underline}](https://pubmed.ncbi.nlm.nih.gov/9749804/#:~:text=distributed%20in%20the%20central%20nervous,such%20molecules%20to%20growing%20axons){alt="https://pubmed.ncbi.nlm.nih.gov/9749804/#:~:text=distributed%20in%20the%20central%20nervous,such%20molecules%20to%20growing%20axons"}. PLP1 is an oligodendrocyte/myelin protein, and FOXD3 is a neural crest/glial factor. These point to enteric glia or Schwann-like cells in the gut.
+
+    **Cluster 19:** *Uncertain (epithelial or immunomodulatory)* – The marker set is mixed. AOC1 (diamine oxidase) is an enzyme of intestinal epithelial cells[[pmc.ncbi.nlm.nih.gov]{.underline}](https://pmc.ncbi.nlm.nih.gov/articles/PMC10288193/#:~:text=The%20DAO%20enzyme%20is%20encoded,cells%2C%20where%20it%20is){alt="https://pmc.ncbi.nlm.nih.gov/articles/PMC10288193/#:~:text=The%20DAO%20enzyme%20is%20encoded,cells%2C%20where%20it%20is"}, whereas CCL17 and CCL22 are chemokines often made by dendritic cells or M2 macrophages. The combination does not match a single well-known cell type. No clear literature source identifies this exact pattern, so cluster 19 remains ambiguous (possibly a specialized epithelial or immune-interacting cell type).
+
+    **Cluster 20:** *Basal/squamous epithelial cells* – Expression of KRT5 (cytokeratin-5) suggests basal epithelial cells (such as those in stratified epithelium). KRT5 is typically a marker of basal layers in epithelia (e.g. airway or anal epithelium). The other genes are less clear, but KRT5 implies a basal epithelial identity. The precise type is uncertain from literature, but cluster 20 likely represents a basal or squamous epithelial population.
+
+### Relabel Clusters in R
+
+Create the final mapping vector and relabel your Seurat object.
+
+```{r}
+# ----------------------------------------------------
+# 15. Relabeling with Refined Names
+# ----------------------------------------------------
+cat("15.1 Defining and applying final cell type names...\n")
+
+# Use the refined names from your review (e.g., using the suggestions above)
+final.cell.types <- c(
+    "0" = "B_Cell_Naive/Memory",  "1" = "NK_Cell",              "2" = "T_Cell_Activated/Effector",
+    "3" = "Neutrophil/Myeloid",   "4" = "B_Cell_Ig_Kappa",      "5" = "T_Cell_CD8_Cytotoxic",
+    "6" = "T_Cell_Atypical/BTBD11+", "7" = "Fibroblast_APOD+",    "8" = "Mesenchymal_FOXS1+",
+    "9" = "Stromal_COL19A1+",     "10" = "Macrophage_C1Q+",      "11" = "Dendritic_Cell_FCER1A+",
+    "12" = "Vascular_Smooth_Muscle", "13" = "Epithelial_Developmental", "14" = "Cycling_Cells",
+    "15" = "B_Cell_Plasma_Precursor", "16" = "Endothelial_Cell",      "17" = "Neural_Sheath_GFRA3+",
+    "18" = "DC_Tissue_Resident",   "19" = "Epithelial_Basal/KRT5+"
+)
+
+# Relabel the Seurat object
+seurat.integrated[['celltype']] <- factor(x = seurat.integrated$integrated_snn_res.0.5, 
+                                         levels = names(final.cell.types))
+levels(seurat.integrated$celltype) <- final.cell.types
+
+# Set the new annotation as the primary cluster identity
+Idents(seurat.integrated) <- "celltype"
+
+# 15.2 Final UMAP Visualization with Cell Type Labels
+p_annotated_final <- DimPlot(seurat.integrated, 
+                             reduction = "umap", 
+                             label = TRUE, 
+                             repel = TRUE, 
+                             pt.size = 0.1) + 
+  ggtitle("UMAP with Final Annotated Cell Types") +
+  theme(legend.position = "right")
+
+ggsave("UMAP_Annotated_CellTypes.png", plot = p_annotated_final, width = 10, height = 8, dpi = 300)
+
+```
+
+![](plot-43.png)
+
+```{r}
+cat("15.1 Defining and applying final cell type names...\n")
+
+# Define final cell type names for each cluster (0 to 20)
+final.cell.types <- c(
+  "0" = "Naïve B cells",
+  "1" = "Cytotoxic lymphocytes (NK cells)",
+  "2" = "CD4+ T cells ",
+  "3" = "Neutrophils",
+  "4" = "Plasma B cells",
+  "5" = "Th1-skewed CD4+ T cells",
+  "6" = "Fibroblasts ",
+  "7" = "CD8+ cytotoxic T cells",
+  "8" = "Smooth muscle cells",
+  "9" = "Mesenchymal ",
+  "10" = "Tissue macrophages",
+  "11" = "Plasma/activated B cells",
+  "12" = "Conventional dendritic cells",
+  "13" = "Enteric neurons",
+  "14" = "Proliferating cells",
+  "15" = "Memory/transitional B cells",
+  "16" = "Endothelial cells",
+  "17" = "CD16+ monocytes (non-classical)",
+  "18" = "Glial/Schwann cells",
+  "19" = "Uncertain (epithelial/immunomodulatory)",
+  "20" = "Basal/squamous epithelial cells"
+)
+
+
+# Relabel the Seurat object
+seurat.integrated[['celltype']] <- factor(x = seurat.integrated$integrated_snn_res.0.5, 
+                                         levels = names(final.cell.types))
+levels(seurat.integrated$celltype) <- final.cell.types
+
+# Set the new annotation as the primary cluster identity
+Idents(seurat.integrated) <- "celltype"
+
+# 15.2 Final UMAP Visualization with Cell Type Labels
+p_annotated_final <- DimPlot(seurat.integrated, 
+                             reduction = "umap", 
+                             label = TRUE, 
+                             repel = TRUE, 
+                             pt.size = 0.1) + 
+  ggtitle("UMAP with Final Annotated Cell Types") +
+  theme(legend.position = "right")
+
+ggsave("UMAP_Annotated_CellTypes.png", plot = p_annotated_final, width = 32, height = 24 , dpi = 600)
+
+```
+
+![](UMAP_Annotated_CellTypes.png)
+
+## Differential Expression Analysis (DEX)
+
+The final step is to perform the key biological comparison, which is Differential Gene Expression (DEX) between your groups, now correctly stratified by cell type.
+
+### Comparative Analysis (DEX)
+
+You have a complex design involving **Disease Status (Control vs. Crohn's)**, **Inflammation State (Non-inflamed vs. Inflamed)**, and **Tissue (Ileum vs. Mesentery)**. We will set up a column to test the main comparison (Crohn's vs. Control) for a specific cell type within a defined tissue and inflammation state.
+
+```{r}
+# ----------------------------------------------------
+# 16. Finalize and Save DEX Results
+# ----------------------------------------------------
+
+# Assuming 'dex_results' is the data frame output from the last successful FindMarkers call.
+# And assuming variables are still set:
+target_cell_type <- "T_Cell_CD8_Cytotoxic"
+ident_1_test <- "Crohn_disease__Inflamed__Mesentery" 
+ident_2_control <- "Control__Non-inflamed__Mesentery" # The working control group
+
+# Regenerate the output filename using clean R syntax (no hidden characters)
+output_filename <- paste0("DEX_", gsub(" ", "_", target_cell_type), "_", 
+                          gsub("__", "_", ident_1_test), "_vs_", gsub("__", "_", ident_2_control), ".csv")
+
+# Save the successful results to the clean filename
+write.csv(cluster.markers, output_filename, row.names = TRUE)
+
+cat(paste("\nDifferential Expression analysis complete. Results saved as:", output_filename, "\n"))
+cat("Comparison is now: Crohn's Inflamed Mesentery vs. Control Non-inflamed Mesentery.\n")
+```
+
+```{r}
+metadata <- read.csv("E:/acode/wsl/data6/gz/metadata_table.csv")
+head(metadata)
+```
+
+```{r}
+# ----------------------------------------------------
+# 17.1 Visualize Top DEX Genes
+# ----------------------------------------------------
+cat("\n17.1 Visualizing the top 5 upregulated and downregulated genes...\n")
+
+# Filter for the top 5 most UP-regulated genes (highest positive log2FC)
+top_up <- cluster.markers %>%
+  slice_max(n = 5, order_by = avg_log2FC) %>%
+  rownames()
+
+# Filter for the top 5 most DOWN-regulated genes (highest negative log2FC)
+top_down <- cluster.markers %>%
+  slice_min(n = 5, order_by = avg_log2FC) %>%
+  rownames()
+
+# Combine the top genes
+top_dex_genes <- unique(c(top_up, top_down))
+
+# Generate a VlnPlot (or FeaturePlot) to show the expression difference between the two groups
+p_vln <- VlnPlot(
+    object = subset_cells_mesentery, # The Mesentery-only T_Cell_CD8_Cytotoxic subset from previous step
+    features = top_dex_genes,
+    group.by = "comparison_full",
+    pt.size = 0.1,
+    cols = c("Crohn_disease__Inflamed__Mesentery" = "#E76F51", 
+             "Control__Non-inflamed__Mesentery" = "#2A9D8F"),
+    ncol = 5
+) + NoLegend() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_vln)
+
+cat("\nAnalysis of Crohn's Disease-specific gene changes is now complete for one cell type.\n")
+cat("Your next step is to repeat the DEX analysis (Step 16) for other critical cell types (e.g., Macrophages, Fibroblasts) and other relevant comparisons (e.g., Ileum tissue).\n")
+```
+
+![](plot-44.png)

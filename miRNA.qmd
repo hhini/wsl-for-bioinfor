@@ -1,0 +1,2098 @@
+## 🧬 Gold-Standard miRNA Expression Analysis Workflow
+
+### 1. 📥 Data Acquisition
+
+-   **Source**: Download raw small RNA-seq data (FASTQ format) from repositories like SRA, ENCODE, TCGA, or GEO.
+
+-   **Metadata**: Collect sample metadata (tissue type, condition, replicate info).
+
+### 2. 🧹 Quality Control (QC)
+
+-   **Tools**: FastQC, MultiQC
+
+-   **Checks**:
+
+    -   Adapter contamination
+
+    -   Read length distribution (miRNAs are \~18–30 nt)
+
+    -   Per-base quality scores
+
+### 3. ✂️ Adapter Trimming
+
+-   **Tools**: Cutadapt, Trimmomatic, fastp
+
+-   **Goal**: Remove 3' adapters and low-quality bases
+
+-   **Note**: miRNA libraries often have short inserts, so precise trimming is critical
+
+### 4. 🧭 Alignment
+
+-   **Tools**: Bowtie, BWA-aln (used by GDC), STAR (for small RNA mode)
+
+-   **Reference**: Align to genome (e.g., GRCh38) and miRNA annotation (e.g., miRBase v22)
+
+-   **Output**: BAM files
+
+### 5. 🧾 miRNA Quantification
+
+-   **Tools**: miRDeep2, sRNAbench, ShortStack, mirExpress
+
+-   **Steps**:
+
+    -   Count reads mapping to known miRNAs
+
+    -   Optionally predict novel miRNAs
+
+-   **Output**: Raw count matrix
+
+### 6. 🧼 Post-Quantification QC
+
+-   **Checks**:
+
+    -   Distribution of counts across samples
+
+    -   Detection of outliers
+
+    -   Sample clustering (PCA, heatmaps)
+
+### 7. 📊 Normalization
+
+-   **Methods**:
+
+    -   RPM (Reads Per Million)
+
+    -   TMM (edgeR), DESeq2 normalization
+
+-   **Goal**: Adjust for library size and composition
+
+### 8. 📈 Expression Matrix
+
+-   **Format**: Rows = miRNAs, Columns = samples
+
+-   **Values**: Raw counts or normalized expression
+
+-   **Use**: Downstream analysis (differential expression, clustering, etc.)
+
+------------------------------------------------------------------------
+
+## 🧬 Dataset Summary: ERX14406316
+
+### 🔹 Study Title
+
+**Dysregulation of miRNAs in patients with Huntington's Disease**
+
+### 🔹 Organism
+
+**Homo sapiens** (human)
+
+### 🔹 Library Strategy
+
+**miRNA-Seq** — specifically designed to profile microRNAs
+
+### 🔹 Sample Type
+
+**Peripheral blood mononuclear cells (PBMCs)** from:
+
+-   15 Huntington’s Disease (HD) patients
+
+-   15 healthy controls
+
+### 🔹 Platform
+
+**Illumina NovaSeq 6000**
+
+### 🔹 Run Info
+
+-   **Run ID**: ERR15002269
+
+-   **Spots**: 31.9 million
+
+-   **Bases**: 2.4 billion
+
+-   **Size**: \~819.5 MB (perfect for WSL)
+
+## 🧪 Experimental Protocol Highlights
+
+-   **RNA Extraction**: TRIzol from PBMCs
+
+-   **Quality Check**: NanoDrop + TapeStation 4200
+
+-   **Library Prep**: QIAseq miRNA Library Kit (Qiagen)
+
+-   **Quantification**: Qubit + TapeStation
+
+-   **Pooling**: Equimolar indexing across samples
+
+-   Construction protocol: A miRNA analysis on peripheral blood mononuclear cells (PBMCs) was performed by RNA-seq in 30 subjects, including 15 HD patients and 15 healthy controls. The subjects were recruited at the Oasi Research Institute - IRCCS (Troina, Italy). PBMCs separation was performed using Ficoll-Paque (Ficoll Plaque PLUS–GE Healthcare Life Sciences, Piscataway, NJ, USA.Total RNA extraction from PBMC was performed using TRIzol reagent (TRIzol Reagent, Invitrogen Life Technologies, Carlsbad, CA, USA), according to the manufacturer's instructions. RNA was stored at −80 ◦C until further processing.RNA concentration and purity were evaluated using NanoDrop™ 2000/2000c (Thermo Fisher Scientific),whereas sample integrity was analyzed by TapeStation 4200 (Agilent Technologies) using RNA ScreenTape Assay. 2.7. Indexed libraries were prepared from 250 ng purified RNA using QIAseq miRNA Library Kit (Qiagen) according to the manufacturer's instructions. Libraries were quantified using the TapeStation 4200 (Agilent Technologies) and Qubit fluorometer (Invitrogen Co.), then pooled such that each index-tagged sample was present in equimolar amounts.\
+    构建方案：采用 RNA-seq 技术对 30 名受试者（包括 15 名亨廷顿氏病患者和 15 名健康对照者）的外周血单核细胞（PBMC）进行 miRNA 分析。受试者由意大利特罗伊纳的 Oasi 研究所-IRCCS 招募。使用 Ficoll-Paque（Ficoll Plaque PLUS-GE Healthcare Life Sciences，Piscataway，新泽西州，美国）进行 PBMC 分离。使用 TRIzol 试剂（TRIzol Reagent，Invitrogen Life Technologies，Carlsbad，CA，美国）从 PBMC 中提取总 RNA，并按照制造商的说明进行。将 RNA 储存在 -80 ◦C 直至进一步处理。使用 NanoDrop™ 2000/2000c（Thermo Fisher Scientific）评估 RNA 浓度和纯度，而使用 RNA ScreenTape Assay 通过 TapeStation 4200（Agilent Technologies）分析样品完整性。2.7. 根据制造商的说明，使用 QIAseq miRNA Library Kit（Qiagen）从 250 ng 纯化 RNA 制备索引文库。使用 TapeStation 4200（Agilent Technologies）和 Qubit 荧光计（Invitrogen Co.）对文库进行定量，然后合并，使得每个索引标记的样本都以等摩尔量存在。
+
+------------------------------------------------------------------------
+
+## 📥 Step 1: Download miRNA Data from SRA
+
+### 📁 Download the SRA file
+
+``` bash
+prefetch ERR15002269
+```
+
+what we get is
+
+``` bash
+jayz@localhost:~/miRNA/data$ prefetch ERR15002269
+
+2025-10-22T07:04:11 prefetch.3.0.3: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-22T07:04:13 prefetch.3.0.3: 1) Downloading 'ERR15002269'...
+2025-10-22T07:04:13 prefetch.3.0.3: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-22T07:04:13 prefetch.3.0.3:  Downloading via HTTPS...
+2025-10-22T07:05:38 prefetch.3.0.3:  HTTPS download succeed
+2025-10-22T07:05:40 prefetch.3.0.3:  'ERR15002269' is valid
+2025-10-22T07:05:40 prefetch.3.0.3: 1) 'ERR15002269' was downloaded successfully
+2025-10-22T07:05:40 prefetch.3.0.3: 'ERR15002269' has 0 unresolved dependencies
+```
+
+### 🔄 Convert to FASTQ
+
+``` bash
+fasterq-dump ERR15002269 --split-files -O . -e 8 
+```
+
+> `-O .` saves output to current directory
+>
+> `-e 8` uses 8 threads for speed Output: `ERR15002269.fastq`
+
+``` bash
+jayz@localhost:~/miRNA/data$ fasterq-dump ERR15002269 --split-files -O . -e 8 
+spots read      : 31,944,685
+reads read      : 31,944,685
+reads written   : 31,944,685
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269  ERR15002269.fastq
+```
+
+-   **Layout**: `SINGLE` — confirmed in the metadata
+
+-   **Library Strategy**: `miRNA-Seq` — typically uses short, single-end reads
+
+-   **Instrument**: Illumina NovaSeq 6000 — supports both single and paired-end, but this run used single-end
+
+So `ERR15002269.fastq` contains all the reads — no `_1.fastq` or `_2.fastq` split needed.
+
+## ✅ Run FastQC on the Single-End FASTQ
+
+Here’s command:
+
+``` bash
+fastqc ERR15002269.fastq -o . 
+```
+
+This will generate:
+
+-   `ERR15002269_fastqc.html` — interactive QC report
+
+-   `ERR15002269_fastqc.zip` — raw QC data
+
+``` bash
+jayz@localhost:~/miRNA/data$ fastqc ERR15002269.fastq -o . 
+null
+Started analysis of ERR15002269.fastq
+Approx 5% complete for ERR15002269.fastq
+Approx 10% complete for ERR15002269.fastq
+Approx 15% complete for ERR15002269.fastq
+Approx 20% complete for ERR15002269.fastq
+Approx 25% complete for ERR15002269.fastq
+Approx 30% complete for ERR15002269.fastq
+Approx 35% complete for ERR15002269.fastq
+Approx 40% complete for ERR15002269.fastq
+Approx 45% complete for ERR15002269.fastq
+Approx 50% complete for ERR15002269.fastq
+Approx 55% complete for ERR15002269.fastq
+Approx 60% complete for ERR15002269.fastq
+Approx 65% complete for ERR15002269.fastq
+Approx 70% complete for ERR15002269.fastq
+Approx 75% complete for ERR15002269.fastq
+Approx 80% complete for ERR15002269.fastq
+Approx 85% complete for ERR15002269.fastq
+Approx 90% complete for ERR15002269.fastq
+Approx 95% complete for ERR15002269.fastq
+Analysis complete for ERR15002269.fastq
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269  ERR15002269.fastq  ERR15002269_fastqc.html  ERR15002269_fastqc.zip
+```
+
+![](images/屏幕截图%202025-10-22%20152201.png)
+
+![](images/屏幕截图%202025-10-22%20152215.png)
+
+![](images/屏幕截图%202025-10-22%20152225.png)
+
+![](images/屏幕截图%202025-10-22%20152240.png)
+
+![](images/屏幕截图%202025-10-22%20152249.png)
+
+## 🚨 FastQC Red Flags & What They Mean
+
+| Metric | Issue Detected | Why It Matters |
+|------------------------|------------------------|------------------------|
+| **Per base sequence content** | High variability across positions | Indicates adapter contamination or bias |
+| **Sequence duplication level** | High duplication (\>50%) | Common in miRNA due to short, repeated reads |
+| **Overrepresented sequences** | Adapter sequences dominate | Must be trimmed to avoid false quantification |
+| **Adapter content** | Strong signal | Confirms presence of 3' adapter contamination |
+
+### **👌check in online**
+
+Direct answer: The QIAseq miRNA Library Kit uses specific adapter sequences for its 3' and 5' adapters, which are published by Qiagen. The commonly cited 3' adapter sequence is AACTGTAGGCACCATCAAT (5'-3'), and the complementary 5' adapter sequence is provided by Qiagen in their handbook and FAQs. For precise downstream parsing (e.g., trimming, deduplication) these adapters are typically trimmed along with the corresponding Illumina adapter sequences during data processing, using the kit’s own UMI-containing design.
+
+from NGI Sweden » Adapter dilution and input optimisation for Qiagen QIAseq miRNA Library kit [link](https://ngisweden.scilifelab.se/2025/05/adapter-dilution-and-input-optimisation-for-qiagen-qiaseq-mirna-library-kit/)
+
+and QiagensmRNAmiRNAProtocol.pdf [pdf](https://genome.med.harvard.edu/documents/libraryPrep/QiagensmRNAmiRNAProtocol.pdf)
+
+### 🔍 Run Adapter Detection
+
+bash
+
+```         
+fastp -i ERR15002269.fastq -o dummy.fastq -j fastp.json -h fastp.html --detect_adapter_for_pe 
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ fastp -i ERR15002269.fastq -o dummy.fastq -j fastp.json -h fastp.html --detect_adapter_for_pe 
+Detecting adapter sequence for read1...
+>QIASeq miRNA adapter
+AACTGTAGGCACCATCAAT
+
+Read1 before filtering:
+total reads: 31944685
+total bases: 2427796060
+Q20 bases: 2397749570(98.7624%)
+Q30 bases: 2336435126(96.2369%)
+
+Read1 after filtering:
+total reads: 29951211
+total bases: 879659476
+Q20 bases: 870151234(98.9191%)
+Q30 bases: 847179780(96.3077%)
+
+Filtering result:
+reads passed filter: 29951211
+reads failed due to low quality: 13009
+reads failed due to too many N: 13
+reads failed due to too short: 1980452
+reads with adapter trimmed: 30405925
+bases trimmed due to adapters: 1523102501
+
+Duplication rate (may be overestimated since this is SE data): 26.5039%
+
+JSON report: fastp.json
+HTML report: fastp.html
+
+fastp -i ERR15002269.fastq -o dummy.fastq -j fastp.json -h fastp.html --detect_adapter_for_pe
+fastp v0.23.4, time used: 84 seconds
+```
+
+Even though your data is single-end, `fastp` will still try to guess the adapter. Check:
+
+-   `fastp.html` for adapter guess
+
+-   `fastp.json` for exact sequence
+
+![](images/屏幕截图%202025-10-22%20155808.png)
+
+![](images/屏幕截图%202025-10-22%20155819.png)
+
+![](images/屏幕截图%202025-10-22%20155837.png)
+
+## ✂️ Next Step: Adapter Trimming
+
+### ✅ Adapter Confirmed: `AACTGTAGGCACCATCAAT`
+
+-   Detected by `fastp` as the **QIASeq miRNA adapter**
+
+-   Trimmed from **30.4 million reads** — strong evidence it was present and dominant
+
+-   Over **1.5 billion bases** removed due to adapter contamination
+
+## 📊 Quality Summary
+
+| Metric                | Value                        |
+|-----------------------|------------------------------|
+| Total reads           | 31.9 million                 |
+| Reads after filtering | 29.95 million                |
+| Adapter-trimmed reads | 30.4 million                 |
+| Bases trimmed         | 1.52 billion                 |
+| Duplication rate      | 26.5% (normal for miRNA-Seq) |
+| Q30 base percentage   | \~96% (excellent quality)    |
+
+## ✂️ Next Step: Trim with `cutadapt` Using Confirmed Adapter
+
+``` bash
+cutadapt -j 8 -a AACTGTAGGCACCATCAAT -m 18 -M 30 -o ERR15002269.trimmed.fastq ERR15002269.fastq
+```
+
+### Explanation:
+
+-   `-j 8`: Tells `cutadapt` to use **8 parallel threads**
+
+-   `-a`: Adapter sequence (confirmed: `AACTGTAGGCACCATCAAT`)
+
+-   `-m 18 -M 30`: Keep reads between 18 and 30 nt (typical for miRNAs)
+
+-   `-o`: Output trimmed FASTQ
+
+``` bash
+jayz@localhost:~/miRNA/data$ cutadapt -j 8 -a AACTGTAGGCACCATCAAT -m 18 -M 30 -o ERR15002269.trimmed.fastq ERR15002269.fastq
+This is cutadapt 4.4 with Python 3.12.3
+Command line parameters: -j 8 -a AACTGTAGGCACCATCAAT -m 18 -M 30 -o ERR15002269.trimmed.fastq ERR15002269.fastq
+Processing single-end reads on 8 cores ...
+Done           00:00:24    31,944,685 reads @   0.8 µs/read;  76.81 M reads/minute
+Finished in 25.041 s (0.784 µs/read; 76.54 M reads/minute).
+
+=== Summary ===
+
+Total reads processed:              31,944,685
+Reads with adapters:                30,363,819 (95.1%)
+
+== Read fate breakdown ==
+Reads that were too short:           2,959,416 (9.3%)
+Reads that were too long:            6,369,160 (19.9%)
+Reads written (passing filters):    22,616,109 (70.8%)
+
+Total basepairs processed: 2,427,796,060 bp
+Total written (filtered):    500,053,158 bp (20.6%)
+
+=== Adapter 1 ===
+
+Sequence: AACTGTAGGCACCATCAAT; Type: regular 3'; Length: 19; Trimmed: 30363819 times        
+
+Minimum overlap: 3
+No. of allowed errors:
+1-9 bp: 0; 10-19 bp: 1
+
+Bases preceding removed adapters:
+  A: 18.2%
+  C: 6.3%
+  G: 30.7%
+  T: 44.8%
+  none/other: 0.0%
+
+Overview of removed sequences
+length  count   expect  max.err error counts
+3       238166  499135.7        0       238166
+4       252542  124783.9        0       252542
+5       143308  31196.0 0       143308
+6       43788   7799.0  0       43788
+7       138787  1949.7  0       138787
+8       443018  487.4   0       443018
+9       269305  121.9   0       269234 71
+10      146457  30.5    1       139325 7132
+11      202753  7.6     1       195252 7501
+12      99058   1.9     1       89280 9778
+13      99406   0.5     1       95635 3771
+14      347694  0.1     1       339303 8391
+15      235808  0.0     1       227945 7863
+16      22512   0.0     1       18509 4003
+17      41980   0.0     1       39622 2358
+18      32510   0.0     1       31034 1476
+19      15076   0.0     1       12162 2914
+20      19427   0.0     1       18463 964
+21      28542   0.0     1       26337 2205
+22      48575   0.0     1       44780 3795
+23      18637   0.0     1       17624 1013
+24      35248   0.0     1       34144 1104
+25      13161   0.0     1       12176 985
+26      16834   0.0     1       16335 499
+27      22552   0.0     1       21858 694
+28      24166   0.0     1       23356 810
+29      15361   0.0     1       14712 649
+30      31817   0.0     1       30821 996
+31      178227  0.0     1       173856 4371
+32      234648  0.0     1       225911 8737
+33      299014  0.0     1       286204 12810
+34      471762  0.0     1       454815 16947
+35      67644   0.0     1       58071 9573
+36      47197   0.0     1       43206 3991
+37      57858   0.0     1       55822 2036
+38      65460   0.0     1       63356 2104
+39      32607   0.0     1       31308 1299
+40      30360   0.0     1       29117 1243
+41      27801   0.0     1       26763 1038
+42      59650   0.0     1       57907 1743
+43      51101   0.0     1       49321 1780
+44      42284   0.0     1       40560 1724
+45      76193   0.0     1       73846 2347
+46      93579   0.0     1       90669 2910
+47      117229  0.0     1       112723 4506
+48      223638  0.0     1       217648 5990
+49      308109  0.0     1       299649 8460
+50      115757  0.0     1       109189 6568
+51      180117  0.0     1       173581 6536
+52      985472  0.0     1       962368 23104
+53      3350774 0.0     1       3273059 77715
+54      11601442        0.0     1       11363608 237834
+55      3906383 0.0     1       3702997 203386
+56      1116947 0.0     1       1044962 71985
+57      328980  0.0     1       310115 18865
+58      287682  0.0     1       264033 23649
+59      229471  0.0     1       216823 12648
+60      308233  0.0     1       297144 11089
+61      507955  0.0     1       487674 20281
+62      497284  0.0     1       480012 17272
+63      360736  0.0     1       343207 17529
+64      329722  0.0     1       309528 20194
+65      204341  0.0     1       193805 10536
+66      169023  0.0     1       161793 7230
+67      131732  0.0     1       126748 4984
+68      120390  0.0     1       115664 4726
+69      57711   0.0     1       55185 2526
+70      31185   0.0     1       29787 1398
+71      5707    0.0     1       4975 732
+72      3329    0.0     1       2880 449
+73      212     0.0     1       143 69
+74      205     0.0     1       54 151
+75      20      0.0     1       15 5
+76      2160    0.0     1       2072 88
+```
+
+## ✅ Trimming Summary
+
+| Metric                     | Value                            |
+|----------------------------|----------------------------------|
+| Total reads processed      | 31.94 million                    |
+| Reads with adapter trimmed | 30.36 million (95.1%)            |
+| Reads passing filters      | 22.62 million (70.8%)            |
+| Reads too short (\<18 nt)  | 2.96 million (9.3%)              |
+| Reads too long (\>30 nt)   | 6.37 million (19.9%)             |
+| Total bases written        | \~500 million                    |
+| Adapter sequence used      | `AACTGTAGGCACCATCAAT`            |
+| Trimming speed             | \~76 million reads/min (8 cores) |
+
+## 🔍 Interpretation
+
+-   **Adapter removal was very successful** — over 95% of reads had adapters trimmed.
+
+-   **Filtering was strict but appropriate** — keeping only reads between 18–30 nt ensures high-quality miRNA candidates.
+
+-   **Final dataset** is clean and ready for alignment or quantification.
+
+Then re-run FastQC:
+
+``` bash
+fastqc ERR15002269.trimmed.fastq -o . 
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269        ERR15002269.trimmed.fastq  ERR15002269_fastqc.zip  fastp.html
+ERR15002269.fastq  ERR15002269_fastqc.html    dummy.fastq             fastp.json
+jayz@localhost:~/miRNA/data$ fastqc ERR15002269.trimmed.fastq -o . 
+null
+Started analysis of ERR15002269.trimmed.fastq
+Approx 5% complete for ERR15002269.trimmed.fastq
+Approx 10% complete for ERR15002269.trimmed.fastq
+Approx 15% complete for ERR15002269.trimmed.fastq
+Approx 20% complete for ERR15002269.trimmed.fastq
+Approx 25% complete for ERR15002269.trimmed.fastq
+Approx 30% complete for ERR15002269.trimmed.fastq
+Approx 35% complete for ERR15002269.trimmed.fastq
+Approx 40% complete for ERR15002269.trimmed.fastq
+Approx 45% complete for ERR15002269.trimmed.fastq
+Approx 50% complete for ERR15002269.trimmed.fastq
+Approx 55% complete for ERR15002269.trimmed.fastq
+Approx 60% complete for ERR15002269.trimmed.fastq
+Approx 65% complete for ERR15002269.trimmed.fastq
+Approx 70% complete for ERR15002269.trimmed.fastq
+Approx 75% complete for ERR15002269.trimmed.fastq
+Approx 80% complete for ERR15002269.trimmed.fastq
+Approx 85% complete for ERR15002269.trimmed.fastq
+Approx 90% complete for ERR15002269.trimmed.fastq
+Approx 95% complete for ERR15002269.trimmed.fastq
+Analysis complete for ERR15002269.trimmed.fastq
+```
+
+This will confirm:
+
+-   Adapter removal
+
+-   Improved base composition
+
+-   Cleaner read length distribution
+
+![](images/屏幕截图%202025-10-22%20161010.png)
+
+## 🚦 FastQC Red Flags: Should Worry?
+
+| Metric | Why It's Red | Does It Matter for miRNA-Seq? |
+|------------------------|------------------------|------------------------|
+| **Per base sequence content** | High base bias at each position | ❌ **Not critical** — miRNAs are short and have strong sequence motifs, so base bias is expected |
+| **GC content** | Deviates from theoretical curve | ❌ **Not critical** — miRNAs have non-random GC profiles depending on tissue and disease |
+| **Sequence duplication level** | High duplication rate | ⚠️ **Expected** — miRNAs are few in number and highly expressed, so duplication is normal |
+| **Overrepresented sequences** | Adapter fragments or dominant miRNAs | ⚠️ **Expected** — top miRNAs will dominate, and adapter remnants may persist slightly |
+
+## 🧬 Why These Warnings Are Normal for miRNA-Seq
+
+-   **miRNAs are short (18–30 nt)** and often sequenced with **single-end reads**, so base composition and duplication behave differently than in mRNA-Seq.
+
+-   **Highly expressed miRNAs** (like let-7, miR-21) will naturally appear as overrepresented sequences.
+
+-   **Adapter trimming** removes most contamination, but some residual bias is tolerated.
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269                      ERR15002269.trimmed_fastqc.zip  fastp.html
+ERR15002269.fastq                ERR15002269_fastqc.html         fastp.json
+ERR15002269.trimmed.fastq        ERR15002269_fastqc.zip
+ERR15002269.trimmed_fastqc.html  dummy.fastq
+```
+
+## 🧬 Reference Setup for Human miRNA-Seq
+
+## #Unset the proxy
+
+`~/.wgetrc` file is forcing `wget` to use a proxy at `127.0.0.1:7897`, which is not running. Here's how to fix it:
+
+## 🧼 Step-by-Step: Disable Proxy for `wget`
+
+### 1. ✏️ Edit `~/.wgetrc`
+
+Open the file:
+
+``` bash
+nano ~/.wgetrc 
+```
+
+### 2. 🔧 Comment Out Proxy Settings
+
+Add `#` at the beginning of each proxy line:
+
+``` bash
+#use_proxy = on #http_proxy = http://127.0.0.1:7897 
+#https_proxy = http://127.0.0.1:7897
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ wget https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+--2025-10-22 16:22:22--  https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+Connecting to 127.0.0.1:7897... failed: Connection refused.
+jayz@localhost:~/miRNA/data$ cat ~/.wgetrc
+use_proxy = on
+http_proxy = http://127.0.0.1:7897
+https_proxy = http://127.0.0.1:7897
+jayz@localhost:~/miRNA/data$ nano ~/.wgetrc
+```
+
+### 1. 🧠 Genome Reference (for alignment)
+
+-   **Genome**: Human (GRCh38/hg38)
+
+-   **Source**: GENCODE or Ensembl
+
+-   **File**: `Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz`
+
+### 📥 Download (Ensembl)
+
+``` bash
+wget --continue https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+
+gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ wget --continue https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+--2025-10-22 16:36:13--  https://ftp.ensembl.org/pub/release-110/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+Resolving ftp.ensembl.org (ftp.ensembl.org)... 193.62.193.169
+Connecting to ftp.ensembl.org (ftp.ensembl.org)|193.62.193.169|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 881964081 (841M) [application/x-gzip]
+Saving to: ‘Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz’
+
+Homo_sapiens.GRCh38.dn 100%[============================>] 841.11M  8.29MB/s    in 2m 13s  
+
+2025-10-22 16:38:28 (6.31 MB/s) - ‘Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz’ saved [881964081/881964081]
+```
+
+### 2. 🎯 miRNA Annotation (for quantification)
+
+-   **Database**: miRBase v22
+
+-   **File**: `hsa.gff3` or `hsa.fa` (for mature miRNA sequences)
+
+### 📥 Download GFF3
+
+``` bash
+wget https://www.mirbase.org/download/hsa.gff3
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ wget https://www.mirbase.org/download/hsa.gff3
+--2025-10-22 16:45:14--  https://www.mirbase.org/download/hsa.gff3
+Resolving www.mirbase.org (www.mirbase.org)... 130.88.97.249
+Connecting to www.mirbase.org (www.mirbase.org)|130.88.97.249|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 534796 (522K) [gff3]
+Saving to: ‘hsa.gff3’
+
+hsa.gff3               100%[============================>] 522.26K   346KB/s    in 1.5s    
+
+2025-10-22 16:45:21 (346 KB/s) - ‘hsa.gff3’ saved [534796/534796]
+```
+
+Or for mature miRNA sequences:
+
+``` bash
+wget https://www.mirbase.org/download/mature.fa
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ wget https://www.mirbase.org/download/mature.fa
+--2025-10-22 16:48:08--  https://www.mirbase.org/download/mature.fa
+Resolving www.mirbase.org (www.mirbase.org)... 130.88.97.249
+Connecting to www.mirbase.org (www.mirbase.org)|130.88.97.249|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 3866196 (3.7M) [gff3]
+Saving to: ‘mature.fa’
+
+mature.fa              100%[============================>]   3.69M  1.57MB/s    in 2.4s    
+
+2025-10-22 16:48:12 (1.57 MB/s) - ‘mature.fa’ saved [3866196/3866196]
+```
+
+## ⚙️ Alignment Options
+
+We can now choose our aligner:
+
+| Tool | Purpose | Notes |
+|------------------------|------------------------|------------------------|
+| **Bowtie** | Fast alignment to genome | Used by miRDeep2 |
+| **STAR** | Splice-aware, supports small RNA | Needs special config for short reads |
+| **BWA-aln** | Used by GDC pipeline | Good for exact matches |
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269                      Homo_sapiens.GRCh38.dna.primary_assembly.fa
+ERR15002269.fastq                Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz.1
+ERR15002269.trimmed.fastq        dummy.fastq
+ERR15002269.trimmed_fastqc.html  fastp.html
+ERR15002269.trimmed_fastqc.zip   fastp.json
+ERR15002269_fastqc.html          hsa.gff3
+ERR15002269_fastqc.zip           mature.fa
+```
+
+## 🧰 Current Assets
+
+| File | Purpose |
+|------------------------------------|------------------------------------|
+| `ERR15002269.trimmed.fastq` | Cleaned miRNA reads |
+| `Homo_sapiens.GRCh38.dna.primary_assembly.fa` | Human reference genome |
+| `hsa.gff3` | miRNA genomic coordinates (from miRBase) |
+| `mature.fa` | Mature miRNA sequences (for quantification) |
+
+## 🧠 Tool Options for Alignment + Quantification
+
+------------------------------------------------------------------------
+
+### 🔬 **Recommended: miRDeep2**
+
+Best for:
+
+-   Known + novel miRNA detection
+
+-   Quantification and expression matrix
+
+-   Uses Bowtie for alignment
+
+And we could not install with apt,and i do not want install conda
+
+step-by-step guide to get **miRDeep2** running manually:
+
+## 🧰 Step 1: Clone the miRDeep2 Repository
+
+``` bash
+git clone https://github.com/rajewsky-lab/mirdeep2.git cd mirdeep2 
+```
+
+This gives you all the Perl scripts and documentation.
+
+## 🛠 Step 2: Add miRDeep2 to our PATH
+
+``` bash
+export PATH=$PWD:$PATH 
+```
+
+To make this permanent, add it to our `~/.bashrc`:
+
+``` bash
+echo 'export PATH=$HOME/miRNA/data/mirdeep2:$PATH' >> ~/.bashrc source ~/.bashrc 
+```
+
+## #📦 Step 3: Install Dependencies
+
+`perl-bioperl` isn’t available via `apt`, install via CPAN:
+
+``` bash
+cpan install Bio::Perl 
+```
+
+Or use `cpanm` if available:
+
+``` bash
+cpanm Bio::Perl 
+```
+
+## 🧪 Step 4: Test the Installation
+
+Run:
+
+``` bash
+miRDeep2.pl --help 
+mapper.pl --help 
+```
+
+If these work, we’re ready to start collapsing reads and aligning.
+
+``` bash
+jayz@localhost:~/miRNA/data/mirdeep2$ ls
+CHANGELOG.md  FAQ.md     Rfam_for_miRDeep.fa  install.pl   tutorial_dir
+CREDITS       LICENSE    TUTORIAL.md          patch_files
+DISCLAIMER    README.md  documentation.html   src
+jayz@localhost:~/miRNA/data/mirdeep2$ miRDeep2.pl --help
+mapper.pl --help
+miRDeep2.pl: command not found
+mapper.pl: command not found
+jayz@localhost:~/miRNA/data/mirdeep2$ export PATH=$PWD/src:$PATH
+jayz@localhost:~/miRNA/data/mirdeep2$ echo 'export PATH=$HOME/miRNA/data/mirdeep2/src:$PATH' >> ~/.bashrc
+source ~/.bashrc
+jayz@localhost:~/miRNA/data/mirdeep2$ echo 'export PATH=$HOME/miRNA/data/mirdeep2/src:$PATH' >> ~/.bashrc
+source ~/.bashrc
+jayz@localhost:~/miRNA/data/mirdeep2$ miRDeep2.pl --help
+mapper.pl --help
+Please run the install.pl script first before using the miRDeep2 package
+                The install script is located in /home/jayz/miRNA/data/mirdeep2/ so just do 
+
+                cd /home/jayz/miRNA/data/mirdeep2/
+perl install.pl
+
+                 at /home/jayz/miRNA/data/mirdeep2/src/miRDeep2.pl line 1128.
+Please run the install.pl script first before using the miRDeep2 package
+The install script is located in /home/jayz/miRNA/data/mirdeep2/ so just do
+
+cd /home/jayz/miRNA/data/mirdeep2/
+perl install.pl
+```
+
+``` bash
+jayz@localhost:~/miRNA/data/mirdeep2$ cd ~/miRNA/data/mirdeep2
+perl install.pl
+
+
+###############################################################################################
+# Last update: Aug 27, 2024
+# This is the miRDeep2 installer
+# It is tested under a bash and zsh shell
+# It will try to download all necessary third-party tools and install them.
+# To run this installer you need to have mirdeep2.0.0.8 or later
+#
+###############################################################################################
+
+gcc version: 13.3.0-6ubuntu2~24.04)                                      already installed, nothing to do ...
+bin directory created successful
+Checking environment variables ...
+adding variables PERL_MB_OPT,PERL_MM_OPT,PERL5LIB to .bashrc
+please run the install.pl script again in a new terminal window or just type
+
+        source ~/.bashrc
+        perl install.pl
+
+        so that the new environment variables are visible to the install.pl script
+```
+
+the installer added critical environment variables to your `.bashrc`, but they haven’t taken effect yet. Let’s activate them and finish the setup:
+
+## ✅ Step 1: Reload Shell
+
+Run this in our current terminal:
+
+``` bash
+source ~/.bashrc 
+```
+
+## 🔁 Step 2: Re-run the Installer
+
+Then re-run the installer to complete setup:
+
+``` bash
+perl install.pl 
+```
+
+This second run will detect the new environment variables and finalize the installation.
+
+Once that’s done, test:
+
+``` bash
+miRDeep2.pl --help 
+mapper.pl --help
+```
+
+``` bash
+jayz@localhost:~/miRNA/data/mirdeep2$ miRDeep2.pl --help 
+mapper.pl --help
+Please run the install.pl script first before using the miRDeep2 package
+                The install script is located in /home/jayz/miRNA/data/mirdeep2/ so just do 
+
+                cd /home/jayz/miRNA/data/mirdeep2/
+perl install.pl
+
+                 at /home/jayz/miRNA/data/mirdeep2/src/miRDeep2.pl line 1128.
+Please run the install.pl script first before using the miRDeep2 package
+The install script is located in /home/jayz/miRNA/data/mirdeep2/ so just do
+
+cd /home/jayz/miRNA/data/mirdeep2/
+perl install.pl
+```
+
+Absolutely — we can **map miRNA reads directly** without using miRDeep2. In fact, many researchers prefer a modular pipeline using tools like **Bowtie**, **SAMtools**, and **featureCounts** for better control and reproducibility. Here's how to do it:
+
+**Randfold can't be installed and `install.pl` won't complete without it, it's totally reasonable to pivot away from miRDeep2.**
+
+------------------------------------------------------------------------
+
+## 🧬 Direct Mapping Pipeline for miRNA-Seq
+
+## 🧬 Comparison: Bowtie + featureCounts vs Salmon
+
+| Aspect | Bowtie + featureCounts | Salmon |
+|------------------------|------------------------|------------------------|
+| **Strategy** | Alignment-based (genome) | Alignment-free (transcriptome) |
+| **Input FASTA** | Full genome (e.g., GRCh38) | Mature miRNA sequences (`mature.fa`) |
+| **Annotation format** | GFF3 or GTF (e.g., `hsa.gff3`) | Not needed — sequences are in FASTA headers |
+| **Read input** | FASTQ → SAM → BAM | FASTQ only |
+| **Tools used** | `bowtie`, `samtools`, `featureCounts` | `salmon` |
+| **Speed** | Slower (due to full alignment) | Faster (k-mer based) |
+| **Accuracy for short reads** | High, but depends on annotation quality | High, optimized for short transcripts |
+| **Novel miRNA detection** | Possible with extra tools (e.g., miRDeep2) | Not supported |
+| **Output** | Raw counts per miRNA feature | TPM, counts, effective length per miRNA |
+| **Flexibility** | Full control over alignment and filtering | Easy setup, less manual tuning |
+
+## 🔍 Which Should You Use?
+
+-   Use **Bowtie + featureCounts** if:
+
+    -   You want full control over alignment and annotation
+
+    -   You’re working with genome-based coordinates (e.g., `hsa.gff3`)
+
+    -   You may later integrate with other genome-wide analyses
+
+-   Use **Salmon** if:
+
+    -   You have clean `mature.fa` sequences
+
+    -   You want fast, alignment-free quantification
+
+    -   You don’t need novel miRNA discovery or genome context
+
+### ✅ Step 1: Build Bowtie Index
+
+Use the human genome FASTA we already have,
+
+``` bash
+bowtie-build Homo_sapiens.GRCh38.dna.primary_assembly.fa GRCh38_index 
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ bowtie-build Homo_sapiens.GRCh38.dna.primary_assembly.fa GRCh38_index                                                                                      
+Settings:
+  Output files: "GRCh38_index.*.ebwt"
+  Line rate: 6 (line is 64 bytes)
+  Lines per side: 1 (side is 64 bytes)
+  Offset rate: 5 (one in 32)
+  FTable chars: 10
+  Strings: unpacked
+  Max bucket size: default
+  Max bucket size, sqrt multiplier: default
+  Max bucket size, len divisor: 4
+  Difference-cover sample period: 1024
+  Endianness: little
+  Actual local endianness: little
+  Sanity checking: disabled
+  Assertions: disabled
+  Random seed: 0
+  Sizeofs: void*:8, int:4, long:8, size_t:8
+Input files DNA, FASTA:
+  Homo_sapiens.GRCh38.dna.primary_assembly.fa
+Reading reference sizes
+  Time reading reference sizes: 00:00:15
+Calculating joined length
+Writing header
+Reserving space for joined string
+Joining reference sequences
+  Time to join reference sequences: 00:00:10
+bmax according to bmaxDivN setting: 737156938
+Using parameters --bmax 552867704 --dcv 1024
+  Doing ahead-of-time memory usage test
+  Passed!  Constructing with these parameters: --bmax 552867704 --dcv 1024
+Constructing suffix-array element generator
+Building DifferenceCoverSample
+  Building sPrime
+  Building sPrimeOrder
+  V-Sorting samples
+  V-Sorting samples time: 00:00:56
+  Allocating rank array
+  Ranking v-sort output
+  Ranking v-sort output time: 00:00:23
+  Invoking Larsson-Sadakane on ranks
+  Invoking Larsson-Sadakane on ranks time: 00:00:30
+  Sanity-checking and returning
+Building samples
+Reserving space for 12 sample suffixes
+Generating random suffixes
+QSorting 12 sample offsets, eliminating duplicates
+Multikey QSorting 12 samples
+  (Using difference cover)
+  Multikey QSorting samples time: 00:00:00
+QSorting sample offsets, eliminating duplicates time: 00:00:00
+Calculating bucket sizes
+Splitting and merging
+  Splitting and merging time: 00:00:00
+Split 1, merged 7; iterating...
+Splitting and merging
+  Splitting and merging time: 00:00:00
+Avg bucket size: 4.21233e+08 (target: 552867703)
+Converting suffix-array elements to index image
+Allocating ftab, absorbFtab
+Entering Ebwt loop
+Getting block 1 of 7
+  Reserving size (552867704) for bucket 1
+  Calculating Z arrays for bucket 1
+...
+...
+Sorting block of length 324375870 for bucket 5
+  (Using difference cover)
+  Sorting block time: 00:01:34
+Returning block of 324375871 for bucket 5
+Getting block 6 of 8
+  Reserving size (552867704) for bucket 6
+  Calculating Z arrays for bucket 6
+  Entering block accumulator loop for bucket 6:
+  bucket 6: 10%
+  bucket 6: 20%
+  bucket 6: 30%
+  bucket 6: 40%
+  bucket 6: 50%
+  bucket 6: 60%
+  bucket 6: 70%
+  bucket 6: 80%
+  bucket 6: 90%
+  bucket 6: 100%
+  Sorting block of length 262906209 for bucket 6
+  (Using difference cover)
+  Sorting block time: 00:01:13
+Returning block of 262906210 for bucket 6
+Getting block 7 of 8
+  Reserving size (552867704) for bucket 7
+  Calculating Z arrays for bucket 7
+  Entering block accumulator loop for bucket 7:
+  bucket 7: 10%
+  bucket 7: 20%
+  bucket 7: 30%
+  bucket 7: 40%
+  bucket 7: 50%
+  bucket 7: 60%
+  bucket 7: 70%
+  bucket 7: 80%
+  bucket 7: 90%
+  bucket 7: 100%
+  Sorting block of length 501135697 for bucket 7
+  (Using difference cover)
+  Sorting block time: 00:02:21
+Returning block of 501135698 for bucket 7
+Getting block 8 of 8
+  Reserving size (552867704) for bucket 8
+  Calculating Z arrays for bucket 8
+  Entering block accumulator loop for bucket 8:
+  bucket 8: 10%
+  bucket 8: 20%
+  bucket 8: 30%
+  bucket 8: 40%
+  bucket 8: 50%
+  bucket 8: 60%
+  bucket 8: 70%
+  bucket 8: 80%
+  bucket 8: 90%
+  bucket 8: 100%
+  Sorting block of length 384718895 for bucket 8
+  (Using difference cover)
+  Sorting block time: 00:01:49
+Returning block of 384718896 for bucket 8
+Exited Ebwt loop
+fchr[A]: 0
+fchr[C]: 870384190
+fchr[G]: 1471627168
+fchr[T]: 2075457683
+fchr[$]: 2948627755
+Exiting Ebwt::buildToDisk()
+Returning from initFromVector
+Wrote 846687581 bytes to primary EBWT file: GRCh38_index.rev.1.ebwt
+Wrote 368578476 bytes to secondary EBWT file: GRCh38_index.rev.2.ebwt
+Re-opening _in1 and _in2 as input streams
+Returning from Ebwt constructor
+Headers:
+    len: 2948627755
+    bwtLen: 2948627756
+    sz: 737156939
+    bwtSz: 737156939
+    lineRate: 6
+    linesPerSide: 1
+    offRate: 5
+    offMask: 0xffffffe0
+    isaRate: -1
+    isaMask: 0xffffffff
+    ftabChars: 10
+    eftabLen: 20
+    eftabSz: 80
+    ftabLen: 1048577
+    ftabSz: 4194308
+    offsLen: 92144618
+    offsSz: 368578472
+    isaLen: 0
+    isaSz: 0
+    lineSz: 64
+    sideSz: 64
+    sideBwtSz: 56
+    sideBwtLen: 224
+    numSidePairs: 6581759
+    numSides: 13163518
+    numLines: 13163518
+    ebwtTotLen: 842465152
+    ebwtTotSz: 842465152
+    reverse: 0
+Total time for backward call to driver() for mirror index: 00:26:07
+```
+
+-   Input: `Homo_sapiens.GRCh38.dna.primary_assembly.fa`
+
+-   Output: `GRCh38_index.*` files (used for alignment)
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269
+ERR15002269.fastq
+ERR15002269.trimmed.fastq
+ERR15002269.trimmed_fastqc.html
+ERR15002269.trimmed_fastqc.zip
+ERR15002269_fastqc.html
+ERR15002269_fastqc.zip
+GRCh38_index.1.ebwt
+GRCh38_index.2.ebwt
+GRCh38_index.3.ebwt
+GRCh38_index.4.ebwt
+GRCh38_index.rev.1.ebwt
+GRCh38_index.rev.2.ebwt
+Homo_sapiens.GRCh38.dna.primary_assembly.fa
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz.1
+dummy.fastq
+fastp.html
+fastp.json
+hsa.gff3
+mature.fa
+```
+
+### ✅ Step 2: Align Trimmed Reads
+
+Use your adapter-trimmed FASTQ file:
+
+``` bash
+bowtie -v 1 -p 8 -S GRCh38_index ERR15002269.trimmed.fastq > aligned.sam 
+```
+
+-   `-v 1`: allows 1 mismatch
+
+-   `-p 8`: uses 8 threads
+
+-   `-S`: outputs SAM format
+
+``` bash
+jayz@localhost:~/miRNA/data$ bowtie -v 1 -p 8 -S GRCh38_index ERR15002269.trimmed.fastq > aligned.sam 
+Setting the index via positional argument will be deprecated in a future release. Please use -x option instead.
+# reads processed: 22616109
+# reads with at least one alignment: 22075012 (97.61%)
+# reads that failed to align: 541097 (2.39%)
+Reported 22075012 alignments
+```
+
+### ✅ Step 3: Convert and Sort BAM
+
+``` bash
+samtools view -bS aligned.sam > aligned.bam
+samtools sort aligned.bam -o aligned.sorted.bam
+samtools index aligned.sorted.bam
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ samtools view -bS aligned.sam > aligned.bam
+samtools sort aligned.bam -o aligned.sorted.bam
+samtools index aligned.sorted.bam
+[bam_sort_core] merging from 4 files and 1 in-memory blocks...
+```
+
+check the file structure
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269
+ERR15002269.fastq
+ERR15002269.trimmed.fastq
+ERR15002269.trimmed_fastqc.html
+ERR15002269.trimmed_fastqc.zip
+ERR15002269_fastqc.html
+ERR15002269_fastqc.zip
+GRCh38_index.1.ebwt
+GRCh38_index.2.ebwt
+GRCh38_index.3.ebwt
+GRCh38_index.4.ebwt
+GRCh38_index.rev.1.ebwt
+GRCh38_index.rev.2.ebwt
+Homo_sapiens.GRCh38.dna.primary_assembly.fa
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz.1
+aligned.bam
+aligned.sam
+aligned.sorted.bam
+aligned.sorted.bam.bai
+dummy.fastq
+fastp.html
+fastp.json
+hsa.gff3
+mature.fa
+```
+
+## #Manual Installation
+
+### 1. Download Subread
+
+``` bash
+wget https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz 
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ wget https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz 
+--2025-10-23 08:46:12--  https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz
+Resolving sourceforge.net (sourceforge.net)... 104.18.12.149, 104.18.13.149, 2606:4700::6812:c95, ...
+Connecting to sourceforge.net (sourceforge.net)|104.18.12.149|:443... ^C
+jayz@localhost:~/miRNA/data$ wget https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz 
+--2025-10-23 08:48:13--  https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz
+Resolving sourceforge.net (sourceforge.net)... 104.18.12.149, 104.18.13.149, 2606:4700::6812:c95, ...
+Connecting to sourceforge.net (sourceforge.net)|104.18.12.149|:443... connected.
+HTTP request sent, awaiting response... 301 Moved Permanently
+Location: https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz/ [following]
+--2025-10-23 08:49:23--  https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz/
+Reusing existing connection to sourceforge.net:443.
+HTTP request sent, awaiting response... 301 Moved Permanently
+Location: https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz/download [following]
+--2025-10-23 08:49:23--  https://sourceforge.net/projects/subread/files/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz/download
+Reusing existing connection to sourceforge.net:443.
+HTTP request sent, awaiting response... 302 Found
+Location: https://downloads.sourceforge.net/project/subread/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz?ts=gAAAAABo-XuT7JfP1GJPYBLb8OgFcEYr5DfjuwNwsi2H_ILest0hXRCNmzr_duYhpvmIK9FZ0bFtud5c36pFLCbAZ4Rwg5Zmaw%3D%3D&use_mirror=cyfuture&r= [following]
+--2025-10-23 08:49:23--  https://downloads.sourceforge.net/project/subread/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz?ts=gAAAAABo-XuT7JfP1GJPYBLb8OgFcEYr5DfjuwNwsi2H_ILest0hXRCNmzr_duYhpvmIK9FZ0bFtud5c36pFLCbAZ4Rwg5Zmaw%3D%3D&use_mirror=cyfuture&r=
+Resolving downloads.sourceforge.net (downloads.sourceforge.net)... 104.18.13.149, 104.18.12.149, 2606:4700::6812:c95, ...
+Connecting to downloads.sourceforge.net (downloads.sourceforge.net)|104.18.13.149|:443... connected.
+HTTP request sent, awaiting response... 302 Found
+Location: https://cyfuture.dl.sourceforge.net/project/subread/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz?viasf=1 [following]
+--2025-10-23 08:49:24--  https://cyfuture.dl.sourceforge.net/project/subread/subread-2.0.3/subread-2.0.3-Linux-x86_64.tar.gz?viasf=1
+Resolving cyfuture.dl.sourceforge.net (cyfuture.dl.sourceforge.net)... 49.50.119.27
+Connecting to cyfuture.dl.sourceforge.net (cyfuture.dl.sourceforge.net)|49.50.119.27|:443...
+ connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 50141646 (48M) [application/x-gzip]
+Saving to: ‘subread-2.0.3-Linux-x86_64.tar.gz.1’
+
+subread-2.0.3-Linux-x8 100%[============================>]  47.82M  4.22MB/s    in 12s     
+
+2025-10-23 08:49:38 (3.92 MB/s) - ‘subread-2.0.3-Linux-x86_64.tar.gz.1’ saved [50141646/50141646]
+```
+
+### 2. Extract and add to PATH
+
+``` bash
+tar -xvzf subread-2.0.3-Linux-x86_64.tar.gz
+cd subread-2.0.3-Linux-x86_64/bin
+export PATH=$PWD:$PATH
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ tar -xvzf subread-2.0.3-Linux-x86_64.tar.gz
+cd subread-2.0.3-Linux-x86_64/bin
+subread-2.0.3-Linux-x86_64/
+subread-2.0.3-Linux-x86_64/README.txt
+subread-2.0.3-Linux-x86_64/LICENSE
+subread-2.0.3-Linux-x86_64/doc/
+subread-2.0.3-Linux-x86_64/doc/._SubreadUsersGuide.pdf
+subread-2.0.3-Linux-x86_64/doc/SubreadUsersGuide.pdf
+subread-2.0.3-Linux-x86_64/doc/SubreadUsersGuide.tex
+subread-2.0.3-Linux-x86_64/test/
+subread-2.0.3-Linux-x86_64/test/chr901.fa
+subread-2.0.3-Linux-x86_64/test/exactSNP/
+subread-2.0.3-Linux-x86_64/test/exactSNP/exactSNP-test.sh
+subread-2.0.3-Linux-x86_64/test/exactSNP/data/
+subread-2.0.3-Linux-x86_64/test/exactSNP/data/test-in.BAM
+subread-2.0.3-Linux-x86_64/test/featureCounts/
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-Jcounts.ora.jcounts
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/test-minimum-UNSTR.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/intron_between.bam.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/across_intron.gtf
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/intron_between_nointron.sam.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/across_genes_r2.sam.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-BothEnds.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-IgnoreDup.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/across_genes_r1.sam
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-Chimeric.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/test-chrname.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-fractions.sam
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/intron_between.gtf
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/test-minimum-3ext.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-Read2Pos5.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/across_intron_r1.bam
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/test-chralias.sam
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/corner-fractions.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/intron_between_nointron.sam
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/across_intron_r1.bam.ora
+subread-2.0.3-Linux-x86_64/test/featureCounts/data/test-fracOverlap.ora
+...
+...
+subread-2.0.3-Linux-x86_64/test/featureCounts/test_chr_inference.sh
+subread-2.0.3-Linux-x86_64/test/featureCounts/test_corner_cases.sh
+subread-2.0.3-Linux-x86_64/test/featureCounts/test_chr_aliases.sh
+subread-2.0.3-Linux-x86_64/test/featureCounts/test_minimal_example.sh
+subread-2.0.3-Linux-x86_64/test/featureCounts/featureCounts-test.sh
+subread-2.0.3-Linux-x86_64/test/featureCounts/test_featurelevel.sh
+subread-2.0.3-Linux-x86_64/test/featureCounts/test_commonusage.sh
+...
+...
+```
+
+we can add that export line to your `~/.bashrc` to make it permanent.
+
+To make it permanent:
+
+``` bash
+echo 'export PATH=$HOME/miRNA/data/subread-2.0.3-Linux-x86_64/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### 4. ✅ Test It
+
+## 🧪 Test It
+
+``` bash
+featureCounts -v 
+```
+
+``` bash
+jayz@localhost:~/miRNA/data/subread-2.0.3-Linux-x86_64/bin$ featureCounts -v 
+
+featureCounts v2.0.3
+```
+
+it prints version info, we’re good to go.
+
+### ✅ Step 4: Quantify miRNAs with featureCounts
+
+Use your `hsa.gff3` annotation:
+
+``` bash
+featureCounts -T 4 -t miRNA -g Name -a hsa.gff3 -o counts.txt aligned.sorted.bam 
+```
+
+-   `-t miRNA`: feature type in GFF3
+
+-   `-g Name`: attribute to group by (e.g., miRNA ID)
+
+-   `-a hsa.gff3`: annotation file
+
+-   `-o counts.txt`: output file
+
+``` bash
+jayz@localhost:~/miRNA/data$ featureCounts -T 4 -t miRNA -g Name -a hsa.gff3 -o counts.txt aligned.sorted.bam 
+
+        ==========     _____ _    _ ____  _____  ______          _____
+        =====         / ____| |  | |  _ \|  __ \|  ____|   /\   |  __ \
+          =====      | (___ | |  | | |_) | |__) | |__     /  \  | |  | |
+            ====      \___ \| |  | |  _ <|  _  /|  __|   / /\ \ | |  | |
+              ====    ____) | |__| | |_) | | \ \| |____ / ____ \| |__| |
+        ==========   |_____/ \____/|____/|_|  \_\______/_/    \_\_____/
+          v2.0.3
+
+//========================== featureCounts setting ===========================\\
+||                                                                            ||
+||             Input files : 1 BAM file                                       ||
+||                                                                            ||
+||                           aligned.sorted.bam                               ||
+||                                                                            ||
+||             Output file : counts.txt                                       ||
+||                 Summary : counts.txt.summary                               ||
+||              Paired-end : no                                               ||
+||        Count read pairs : no                                               ||
+||              Annotation : hsa.gff3 (GTF)                                   ||
+||      Dir for temp files : ./                                               ||
+||                                                                            ||
+||                 Threads : 4                                                ||
+||                   Level : meta-feature level                               ||
+||      Multimapping reads : not counted                                      ||
+|| Multi-overlapping reads : not counted                                      ||
+||   Min overlapping bases : 1                                                ||
+||                                                                            ||
+\\============================================================================//
+
+//================================= Running ==================================\\
+||                                                                            ||
+|| Load annotation file hsa.gff3 ...                                          ||
+||    Features : 2883                                                         ||
+||    Meta-features : 2652                                                    ||
+||    Chromosomes/contigs : 24                                                ||
+||                                                                            ||
+|| Process BAM file aligned.sorted.bam...                                     ||
+||    Single-end reads are included.                                          ||
+||    Total alignments : 22616109                                             ||
+||    Successfully assigned alignments : 19649842 (86.9%)                     ||
+||    Running time : 0.03 minutes                                             ||
+||                                                                            ||
+|| Write the final count table.                                               ||
+|| Write the read assignment summary.                                         ||
+||                                                                            ||
+|| Summary of counting results can be found in file "counts.txt.summary"      ||
+||                                                                            ||
+\\============================================================================//
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269
+ERR15002269.fastq
+ERR15002269.trimmed.fastq
+ERR15002269.trimmed_fastqc.html
+ERR15002269.trimmed_fastqc.zip
+ERR15002269_fastqc.html
+ERR15002269_fastqc.zip
+GRCh38_index.1.ebwt
+GRCh38_index.2.ebwt
+GRCh38_index.3.ebwt
+GRCh38_index.4.ebwt
+GRCh38_index.rev.1.ebwt
+GRCh38_index.rev.2.ebwt
+Homo_sapiens.GRCh38.dna.primary_assembly.fa
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz.1
+aligned.bam
+aligned.sam
+aligned.sorted.bam
+aligned.sorted.bam.bai
+counts.txt
+counts.txt.summary
+dummy.fastq
+fastp.html
+fastp.json
+hsa.gff3
+mature.fa
+subread-2.0.3-Linux-x86_64
+subread-2.0.3-Linux-x86_64.tar.gz
+```
+
+🎉 Success! We’ve just completed a full **genome-based miRNA quantification pipeline** using:
+
+-   ✅ Bowtie for alignment
+
+-   ✅ SAMtools for BAM conversion and sorting
+
+-   ✅ featureCounts for expression quantification
+
+## 📦 What we Just Produced
+
+| File                 | Description                                      |
+|----------------------|--------------------------------------------------|
+| `counts.txt`         | miRNA expression matrix (raw counts per feature) |
+| `counts.txt.summary` | Summary of read assignment statistics            |
+
+## 📊 Next Steps
+
+### 🔍 1. Inspect `counts.txt`
+
+You can preview the top rows:
+
+``` bash
+head counts.txt 
+```
+
+It should show miRNA IDs (from `hsa.gff3`) and their corresponding read counts.
+
+``` bash
+jayz@localhost:~/miRNA/data$ head counts.txt 
+# Program:featureCounts v2.0.3; Command:"featureCounts" "-T" "4" "-t" "miRNA" "-g" "Name" "-a" "hsa.gff3" "-o" "counts.txt" "aligned.sorted.bam"
+Geneid  Chr     Start   End     Strand  Length  aligned.sorted.bam
+hsa-miR-6859-5p chr1;chr1;chr15;chr16   17409;187931;101973529;17092    17431;187953;101973551;17114        -;-;+;- 92      3
+hsa-miR-6859-3p chr1;chr1;chr15;chr16   17369;187891;101973569;17052    17391;187913;101973591;17074        -;-;+;- 92      0
+hsa-miR-1302    chr1;chr12;chr15;chr19;chr2;chr2;chr20;chr7;chr8;chr9;chr9      30438;112695082;101960504;72045;113583004;207269328;50614689;18127234;141786255;30216;97363596      30458;112695102;101960524;72065;113583024;207269348;50614709;18127254;141786275;30236;97363616 +;-;-;+;-;-;-;-;-;+;-    231     0
+hsa-miR-12136   chr1    632668  632685  -       18      630
+hsa-miR-200b-5p chr1    1167124 1167145 +       22      4
+hsa-miR-200b-3p chr1    1167160 1167181 +       22      84
+hsa-miR-200a-5p chr1    1167878 1167899 +       22      39
+hsa-miR-200a-3p chr1    1167916 1167937 +       22      117
+```
+
+## 🔍 Example Interpretation
+
+``` bash
+hsa-miR-200a-3p   chr1   1167916   1167937   +   22   117 
+```
+
+-   `hsa-miR-200a-3p` is on chromosome 1
+
+-   It spans positions 1167916–1167937 on the `+` strand
+
+-   It’s 22 bp long
+
+-   **117 reads** were assigned to it
+
+### Use `less` (scrollable)
+
+``` bash
+less counts.txt.summary 
+```
+
+-   Use arrow keys to scroll
+
+-   Press `q` to quit
+
+``` bash
+Status  aligned.sorted.bam
+Assigned        19649842
+Unassigned_Unmapped     541097
+Unassigned_Read_Type    0
+Unassigned_Singleton    0
+Unassigned_MappingQuality       0
+Unassigned_Chimera      0
+Unassigned_FragmentLength       0
+Unassigned_Duplicate    0
+Unassigned_MultiMapping 0
+Unassigned_Secondary    0
+Unassigned_NonSplit     0
+Unassigned_NoFeatures   1991088
+Unassigned_Overlapping_Length   0
+Unassigned_Ambiguity    434082
+```
+
+## 📊 Summary Interpretation
+
+| Category | Count | Meaning |
+|------------------------|------------------------|------------------------|
+| **Assigned** | 19,649,842 | ✅ Reads successfully matched to miRNA features in `hsa.gff3` |
+| **Unassigned_Unmapped** | 541,097 | ❌ Reads didn’t align to the genome at all |
+| **Unassigned_NoFeatures** | 1,991,088 | ❌ Reads aligned to the genome but didn’t overlap any annotated miRNA |
+| **Unassigned_Ambiguity** | 434,082 | ⚠️ Reads overlapped multiple features and couldn’t be uniquely assigned |
+| **Other Unassigned** | 0 | ✅ No issues with read type, duplicates, quality, etc. |
+
+## 🧠 What This Tells
+
+-   **86.9% of reads were successfully assigned** — that’s excellent for miRNA-Seq.
+
+-   The **\~2 million unassigned reads** likely hit intergenic or non-miRNA regions.
+
+-   The **434k ambiguous reads** suggest some miRNAs overlap or share coordinates — common in miRNA families.
+
+------------------------------------------------------------------------
+
+## 🧬 miRNA Quantification with Salmon
+
+### 🔹 Step 1: Prepare our Reference
+
+Use your `mature.fa` file from miRBase — this contains mature miRNA sequences.
+
+``` bash
+ls mature.fa 
+```
+
+Make sure it’s properly formatted (FASTA headers like `>hsa-miR-21-5p`).
+
+### 🔹 Step 2: Build Salmon Index
+
+```         
+salmon index -t mature.fa -i mirna_index -k 17 
+```
+
+-   `-t`: transcript FASTA (our `mature.fa`)
+
+-   `-i`: output index directory
+
+-   `-k 17`: k-mer size (17–21 is ideal for miRNA, which are \~22 nt long)
+
+``` bash
+[2025-10-23 09:24:55.349] [puff::index::jointLog] [info] Replaced 304398 non-ATCG nucleotides
+[2025-10-23 09:24:55.349] [puff::index::jointLog] [info] Clipped poly-A tails from 1 transcripts
+wrote 48071 cleaned references
+[2025-10-23 09:24:55.368] [puff::index::jointLog] [info] Filter size not provided; estimating from number of distinct k-mers
+[2025-10-23 09:24:55.377] [puff::index::jointLog] [info] ntHll estimated 233665 distinct k-mers, setting filter size to 2^22
+Threads = 2
+Vertex length = 17
+Hash functions = 5
+Filter size = 4194304
+Capacity = 1
+Files:
+mirna_index/ref_k17_fixed.fa
+--------------------------------------------------------------------------------
+Round 0, 0:4194304
+Pass    Filling Filtering
+1       0       0
+2       0       0
+True junctions count = 5429
+False junctions count = 101504
+Hash table size = 106933
+Candidate marks count = 116021
+--------------------------------------------------------------------------------
+Reallocating bifurcations time: 0
+True marks count: 105160
+Edges construction time: 0
+--------------------------------------------------------------------------------
+Distinct junctions = 5429
+
+TwoPaCo::buildGraphMain:: allocated with scalable_malloc; freeing.
+TwoPaCo::buildGraphMain:: Calling scalable_allocation_command(TBBMALLOC_CLEAN_ALL_BUFFERS, 0);
+allowedIn: 20
+Max Junction ID: 96233
+seen.size():769873 kmerInfo.size():96234
+approximateContigTotalLength: 242257
+counters for complex kmers:
+(prec>1 & succ>1)=493 | (succ>1 & isStart)=324 | (prec>1 & isEnd)=339 | (isStart & isEnd)=7 
+contig count: 53161 element count: 1121286 complex nodes: 1163
+# of ones in rank vector: 53160
+[2025-10-23 09:24:56.048] [puff::index::jointLog] [info] Starting the Pufferfish indexing by reading the GFA binary file.
+[2025-10-23 09:24:56.048] [puff::index::jointLog] [info] Setting the index/BinaryGfa directory mirna_index
+size = 1121286
+-----------------------------------------
+| Loading contigs | Time = 168.82 us
+-----------------------------------------
+size = 1121286
+-----------------------------------------
+| Loading contig boundaries | Time = 71.113 us
+-----------------------------------------
+Number of ones: 53160
+Number of ones per inventory item: 512
+Inventory entries filled: 104
+53160
+[2025-10-23 09:24:56.051] [puff::index::jointLog] [info] Done wrapping the rank vector with a rank9sel structure.
+[2025-10-23 09:24:56.052] [puff::index::jointLog] [info] contig count for validation: 53160 
+[2025-10-23 09:24:56.060] [puff::index::jointLog] [info] Total # of Contigs : 53160
+[2025-10-23 09:24:56.061] [puff::index::jointLog] [info] Total # of numerical Contigs : 53160
+[2025-10-23 09:24:56.061] [puff::index::jointLog] [info] Total # of contig vec entries: 59816
+[2025-10-23 09:24:56.061] [puff::index::jointLog] [info] bits per offset entry 16
+[2025-10-23 09:24:56.063] [puff::index::jointLog] [info] Done constructing the contig vector. 53161
+[2025-10-23 09:24:56.067] [puff::index::jointLog] [info] # segments = 53160
+[2025-10-23 09:24:56.067] [puff::index::jointLog] [info] total length = 1121286
+[2025-10-23 09:24:56.072] [puff::index::jointLog] [info] Reading the reference files ...    
+[2025-10-23 09:24:56.083] [puff::index::jointLog] [info] positional integer width = 21
+[2025-10-23 09:24:56.083] [puff::index::jointLog] [info] seqSize = 1121286
+[2025-10-23 09:24:56.083] [puff::index::jointLog] [info] rankSize = 1121286
+[2025-10-23 09:24:56.083] [puff::index::jointLog] [info] edgeVecSize = 0
+[2025-10-23 09:24:56.083] [puff::index::jointLog] [info] num keys = 270726
+for info, total work write each  : 2.331    total work inram from level 3 : 4.322  total work raw : 25.000
+[Building BooPHF]  100  %   elapsed:   0 min 0  sec   remaining:   0 min 0  sec
+Bitarray         1424512  bits (100.00 %)   (array + ranks )
+final hash             0  bits (0.00 %) (nb in final hash 0)
+[2025-10-23 09:24:56.105] [puff::index::jointLog] [info] mphf size = 0.169815 MB
+[2025-10-23 09:24:56.105] [puff::index::jointLog] [info] chunk size = 560643
+[2025-10-23 09:24:56.105] [puff::index::jointLog] [info] chunk 0 = [0, 560651)
+[2025-10-23 09:24:56.105] [puff::index::jointLog] [info] chunk 1 = [560651, 1121270)        
+[2025-10-23 09:24:56.111] [puff::index::jointLog] [info] finished populating pos vector     
+[2025-10-23 09:24:56.111] [puff::index::jointLog] [info] writing index components
+[2025-10-23 09:24:56.113] [puff::index::jointLog] [info] finished writing dense pufferfish index
+[2025-10-23 09:24:56.114] [jLog] [info] done building index
+```
+
+## 📦 Key Stats from the Log
+
+| Metric                | Value     | Meaning                                    |
+|-------------------|------------------|----------------------------------|
+| Cleaned references    | 48,071    | Number of usable miRNA transcripts         |
+| Distinct k-mers       | 233,665   | Unique sequence fragments used for mapping |
+| Contigs               | 53,160    | Indexed miRNA sequences                    |
+| Total sequence length | 1,121,286 | Combined length of all miRNAs              |
+| Index size            | \~0.17 MB | Lightweight and fast                       |
+
+### 🔹 Step 3: Quantify Expression
+
+Use your trimmed FASTQ file:
+
+``` bash
+salmon quant -i mirna_index -l A -r ERR15002269.trimmed.fastq -o salmon_quant --validateMappings 
+```
+
+-   `-l A`: auto-detect library type
+
+-   `-r`: single-end reads
+
+-   `--validateMappings`: improves accuracy for short reads
+
+``` bash
+jayz@localhost:~/miRNA/data$ salmon quant -i mirna_index -l A -r ERR15002269.trimmed.fastq -o salmon_quant --validateMappings
+### salmon (selective-alignment-based) v1.10.2
+### [ program ] => salmon
+### [ command ] => quant
+### [ index ] => { mirna_index }
+### [ libType ] => { A }
+### [ unmatedReads ] => { ERR15002269.trimmed.fastq }
+### [ output ] => { salmon_quant }
+### [ validateMappings ] => { }
+Logs will be written to salmon_quant/logs
+[2025-10-23 09:28:18.953] [jointLog] [info] setting maxHashResizeThreads to 16
+[2025-10-23 09:28:18.953] [jointLog] [info] Fragment incompatibility prior below threshold.  Incompatible fragments will be ignored.
+[2025-10-23 09:28:18.953] [jointLog] [info] Usage of --validateMappings implies use of minScoreFraction. Since not explicitly specified, it is being set to 0.65
+[2025-10-23 09:28:18.953] [jointLog] [info] Setting consensusSlack to selective-alignment default of 0.35.
+[2025-10-23 09:28:18.953] [jointLog] [info] parsing read library format
+-----------------------------------------
+| Loading contig table | Time = 3.1963 ms
+-----------------------------------------
+size = 53161
+-----------------------------------------
+| Loading contig offsets | Time = 306.09 us
+-----------------------------------------
+-----------------------------------------
+| Loading reference lengths | Time = 200.91 us
+-----------------------------------------
+-----------------------------------------
+| Loading mphf table | Time = 151.66 us
+-----------------------------------------
+size = 1121286
+Number of ones: 53160
+Number of ones per inventory item: 512
+Inventory entries filled: 104
+-----------------------------------------
+| Loading contig boundaries | Time = 2.0608 ms
+-----------------------------------------
+size = 1121286
+-----------------------------------------
+| Loading sequence | Time = 355.69 us
+-----------------------------------------
+size = 270726
+-----------------------------------------
+| Loading positions | Time = 508.91 us
+-----------------------------------------
+size = 1051325
+-----------------------------------------
+| Loading reference sequence | Time = 240.39 us
+-----------------------------------------
+-----------------------------------------
+| Loading reference accumulative lengths | Time = 261.56 us
+-----------------------------------------
+[2025-10-23 09:28:18.955] [jointLog] [info] There is 1 library.
+[2025-10-23 09:28:18.955] [jointLog] [info] Loading pufferfish index
+[2025-10-23 09:28:18.955] [jointLog] [info] Loading dense pufferfish index.
+[2025-10-23 09:28:18.963] [jointLog] [info] done
+[2025-10-23 09:28:19.036] [jointLog] [info] Index contained 48204 targets
+[2025-10-23 09:28:19.041] [jointLog] [info] Number of decoys : 0
+
+[2025-10-23 09:28:19.182] [jointLog] [info] Automatically detected most likely library type as SF
+processed 22500001 fragments
+hits: 7061246; hits per frag:  0.314018
+...
+...
+[2025-10-23 09:28:24.193] [jointLog] [warning] Only 4004407 fragments were mapped, but the number of burn-in fragments was set to 5000000.
+The effective lengths have been computed using the observed mappings.
+
+[2025-10-23 09:28:24.193] [jointLog] [info] Mapping rate = 17.706%
+
+[2025-10-23 09:28:24.193] [jointLog] [info] finished quantifyLibrary()
+[2025-10-23 09:28:24.193] [jointLog] [info] Starting optimizer
+[2025-10-23 09:28:24.200] [jointLog] [info] Marked 0 weighted equivalence classes as degenerate
+[2025-10-23 09:28:24.212] [jointLog] [info] iteration = 0 | max rel diff. = 6725.05
+[2025-10-23 09:28:24.311] [jointLog] [info] iteration = 100 | max rel diff. = 0.003271      
+[2025-10-23 09:28:24.312] [jointLog] [info] Finished optimizer
+[2025-10-23 09:28:24.312] [jointLog] [info] writing output
+```
+
+``` bash
+jayz@localhost:~/miRNA/data$ ls
+ERR15002269                                       aligned.bam
+ERR15002269.fastq                                 aligned.sam
+ERR15002269.trimmed.fastq                         aligned.sorted.bam
+ERR15002269.trimmed_fastqc.html                   aligned.sorted.bam.bai
+ERR15002269.trimmed_fastqc.zip                    counts.txt
+ERR15002269_fastqc.html                           counts.txt.summary
+ERR15002269_fastqc.zip                            dummy.fastq
+GRCh38_index.1.ebwt                               fastp.html
+GRCh38_index.2.ebwt                               fastp.json
+GRCh38_index.3.ebwt                               hsa.gff3
+GRCh38_index.4.ebwt                               mature.fa
+GRCh38_index.rev.1.ebwt                           mirna_index
+GRCh38_index.rev.2.ebwt                           salmon_quant
+Homo_sapiens.GRCh38.dna.primary_assembly.fa       subread-2.0.3-Linux-x86_64
+Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz.1  subread-2.0.3-Linux-x86_64.tar.gz
+```
+
+## 🧬 Key Highlights from Salmon Log
+
+| Metric | Value | Meaning |
+|------------------------|------------------------|------------------------|
+| **Fragments processed** | 22,500,001 | Total reads Salmon attempted to quantify |
+| **Fragments mapped** | 4,004,407 | Reads successfully mapped to miRNA targets |
+| **Mapping rate** | 17.7% | Reasonable for short miRNA reads; depends on reference quality |
+| **Targets in index** | 48,204 | Number of miRNA entries from `mature.fa` |
+| **Library type detected** | SF | Single-end, Forward strand — auto-detected |
+| **Effective lengths computed** | ✅ Yes | Salmon adjusted for transcript length bias |
+
+## 📦 Output Files
+
+Check inside the `salmon_quant/` folder. andfind:
+
+| File | Purpose |
+|----|----|
+| `quant.sf` | Main result: TPMs, counts, effective lengths per miRNA |
+| `lib_format_counts.json` | Library type stats |
+| `cmd_info.json` | Command and version metadata |
+| `logs/` | Detailed logs (optional) |
+
+``` bash
+jayz@localhost:~/miRNA/data/salmon_quant$ ls
+aux_info  cmd_info.json  libParams  lib_format_counts.json  logs  quant.sf
+```
+
+## 🔍 Next Step: View Results
+
+To preview the top miRNAs:
+
+``` bash
+head quant.sf 
+```
+
+Each row includes:
+
+-   `Name`: miRNA ID
+
+-   `Length`: transcript length
+
+-   `EffectiveLength`: adjusted for bias
+
+-   `TPM`: normalized expression
+
+-   `NumReads`: raw counts
+
+``` bash
+jayz@localhost:~/miRNA/data/salmon_quant$ head quant.sf 
+Name    Length  EffectiveLength TPM     NumReads
+cel-let-7-5p    22      2.211   0.000000        0.000
+cel-let-7-3p    22      2.211   0.000000        0.000
+cel-lin-4-5p    21      2.198   0.000000        0.000
+cel-lin-4-3p    22      2.211   0.000000        0.000
+cel-miR-1-5p    22      2.211   0.000000        0.000
+cel-miR-1-3p    21      2.198   0.000000        0.000
+cel-miR-2-5p    22      2.211   0.000000        0.000
+cel-miR-2-3p    23      2.223   0.000000        0.000
+cel-miR-34-5p   22      2.211   0.000000        0.000
+```
+
+## 🔢 Sort by NumReads (Descending)
+
+bash
+
+```         
+tail -n +2 quant.sf | sort -k5,5nr | head 
+```
+
+### Explanation:
+
+-   `tail -n +2`: skips the header
+
+-   `sort -k5,5nr`: sorts by column 5 (`NumReads`), numerically and in reverse (descending)
+
+-   `head`: shows the top 10 expressed miRNAs
+
+``` bash
+jayz@localhost:~/miRNA/data/salmon_quant$ tail -n +2 quant.sf | sort -k5,5nr | head 
+aca-miR-191-5p  23      2.223   204252.114267   821467.161
+xla-miR-126-2-3p        21      2.198   187922.791178   747209.000
+oha-miR-191-5p  23      2.223   168531.722682   677805.839
+gga-miR-142-5p  22      2.211   122638.904800   490473.582
+hsa-miR-142-5p  21      2.198   77865.288412    309603.981
+mne-miR-24-3p   22      2.211   48481.357718    193893.000
+ggo-miR-150     22      2.211   40599.789654    162372.000
+oni-miR-26b     22      2.211   20459.421505    81824.000
+oga-miR-342     24      2.235   19482.240597    78783.817
+eca-miR-335     23      2.223   16012.876916    64401.059
+```
+
+## 📊 Column Breakdown
+
+| Column            | Meaning                                         |
+|-------------------|-------------------------------------------------|
+| `Name`            | miRNA ID (from `mature.fa`)                     |
+| `Length`          | Length of the miRNA sequence                    |
+| `EffectiveLength` | Adjusted length used for TPM normalization      |
+| `TPM`             | Transcripts Per Million — normalized expression |
+| `NumReads`        | Raw number of reads assigned to this miRNA      |
+
+## 🔍 What You’re Seeing
+
+These miRNAs had the **highest read counts** in our sample:
+
+| miRNA ID | Species Prefix | NumReads | TPM | Notes |
+|---------------|---------------|---------------|---------------|---------------|
+| `aca-miR-191-5p` | *Ailuropoda* (giant panda) | 821,467 | 204,252 | Likely cross-species match |
+| `xla-miR-126-2-3p` | *Xenopus laevis* (frog) | 747,209 | 187,922 | Non-human, possibly conserved |
+| `oha-miR-191-5p` | *Ornithorhynchus* (platypus) | 677,805 | 168,531 | Another conserved hit |
+| `gga-miR-142-5p` | *Gallus gallus* (chicken) | 490,473 | 122,638 | Avian match |
+| `hsa-miR-142-5p` | *Homo sapiens* | 309,604 | 77,865 | ✅ Human miRNA |
+| `mne-miR-24-3p` | *Macaca nemestrina* (monkey) | 193,893 | 48,481 | Primate match |
+| `ggo-miR-150` | *Gorilla gorilla* | 162,372 | 40,599 | Primate match |
+| `oni-miR-26b` | *Oreochromis niloticus* (tilapia) | 81,824 | 20,459 | Fish match |
+| `oga-miR-342` | *Otolemur garnettii* (lemur) | 78,784 | 19,482 | Primate match |
+| `eca-miR-335` | *Equus caballus* (horse) | 64,401 | 16,013 | Mammal match |
+
+## 🧠 Why So Many Non-Human miRNAs?
+
+`mature.fa` likely includes **miRNAs from multiple species** (e.g., from miRBase). Salmon will quantify **any matching sequence**, regardless of species prefix.
+
+### ✅ What We Can Do:
+
+-   **Filter for human miRNAs**: Keep only those starting with `hsa-`
+
+    ```         
+    grep '^hsa' quant.sf  > hsa_quant.sf
+    ```
+
+``` bash
+jayz@localhost:~/miRNA/data/salmon_quant$ tail -n +2 hsa_quant.sf | sort -k5,5nr | head     
+hsa-miR-142-5p  21      2.198   77865.288412    309603.981
+hsa-miR-671-5p  23      2.223   302.387973      1216.153
+hsa-miR-532-3p  22      2.211   99.020168       396.014
+hsa-miR-1255a   23      2.223   90.754719       365.000
+hsa-miR-4732-5p 23      2.223   18.896873       76.000
+hsa-miR-766-3p  22      2.211   17.746509       70.974
+hsa-miR-6882-5p 22      2.211   12.502091       50.000
+hsa-miR-1255b-5p        22      2.211   6.501087        26.000
+hsa-miR-5189-3p 21      2.198   6.035991        24.000
+hsa-miR-6876-5p 22      2.211   6.001004        24.000
+```
+
+``` bash
+ayz@localhost:~/miRNA/data$ tree
+.
+├── ERR15002269
+│   └── ERR15002269.sra
+├── ERR15002269.fastq
+├── ERR15002269.trimmed.fastq
+├── ERR15002269.trimmed_fastqc.html
+├── ERR15002269.trimmed_fastqc.zip
+├── ERR15002269_fastqc.html
+├── ERR15002269_fastqc.zip
+├── GRCh38_index.1.ebwt
+├── GRCh38_index.2.ebwt
+├── GRCh38_index.3.ebwt
+├── GRCh38_index.4.ebwt
+├── GRCh38_index.rev.1.ebwt
+├── GRCh38_index.rev.2.ebwt
+├── Homo_sapiens.GRCh38.dna.primary_assembly.fa
+├── Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz.1
+├── aligned.bam
+├── aligned.sam
+├── aligned.sorted.bam
+├── aligned.sorted.bam.bai
+├── counts.txt
+├── counts.txt.summary
+├── dummy.fastq
+├── fastp.html
+├── fastp.json
+├── hsa.gff3
+├── mature.fa
+├── mirna_index
+│   ├── complete_ref_lens.bin
+│   ├── ctable.bin
+│   ├── ctg_offsets.bin
+│   ├── duplicate_clusters.tsv
+│   ├── info.json
+│   ├── mphf.bin
+│   ├── pos.bin
+│   ├── pre_indexing.log
+│   ├── rank.bin
+│   ├── refAccumLengths.bin
+│   ├── ref_indexing.log
+│   ├── reflengths.bin
+│   ├── refseq.bin
+│   ├── seq.bin
+│   └── versionInfo.json
+├── salmon_quant
+│   ├── aux_info
+│   │   ├── ambig_info.tsv
+│   │   ├── expected_bias.gz
+│   │   ├── fld.gz
+│   │   ├── meta_info.json
+│   │   ├── observed_bias.gz
+│   │   └── observed_bias_3p.gz
+│   ├── cmd_info.json
+│   ├── hsa_quant.sf
+│   ├── libParams
+│   │   └── flenDist.txt
+│   ├── lib_format_counts.json
+│   ├── logs
+│   │   └── salmon_quant.log
+│   └── quant.sf
+├── subread-2.0.3-Linux-x86_64
+│   ├── LICENSE
+│   ├── README.txt
+│   ├── annotation
+│   │   ├── hg19_RefSeq_exon.txt
+│   │   ├── hg38_RefSeq_exon.txt
+│   │   ├── mm10_RefSeq_exon.txt
+│   │   └── mm9_RefSeq_exon.txt
+│   ├── bin
+│   │   ├── exactSNP
+│   │   ├── featureCounts
+│   │   ├── subindel
+│   │   ├── subjunc
+│   │   ├── sublong
+│   │   ├── subread-align
+│   │   ├── subread-buildindex
+│   │   └── utilities
+│   │       ├── detectionCall
+│   │       ├── flattenGTF
+│   │       ├── genRandomReads
+│   │       ├── propmapped
+│   │       ├── qualityScores
+│   │       ├── removeDup
+│   │       ├── repair
+│   │       ├── subread-fullscan
+│   │       └── txUnique
+│   ├── doc
+│   │   ├── SubreadUsersGuide.pdf
+│   │   └── SubreadUsersGuide.tex
+│   └── test
+│       ├── chr901.fa
+│       ├── exactSNP
+│       │   ├── data
+│       │   │   └── test-in.BAM
+│       │   └── exactSNP-test.sh
+│       ├── featureCounts
+│       │   ├── data
+│       │   │   ├── across_genes.gtf
+│       │   │   ├── across_genes_r1.bam
+│       │   │   ├── across_genes_r1.bam.ora
+│       │   │   ├── across_genes_r1.sam
+│       │   │   ├── across_genes_r1.sam.ora
+│       │   │   ├── across_genes_r2.bam
+│       │   │   ├── across_genes_r2.bam.ora
+│       │   │   ├── across_genes_r2.sam
+│       │   │   ├── across_genes_r2.sam.ora
+│       │   │   ├── across_intron.gtf
+│       │   │   ├── across_intron_r1.bam
+│       │   │   ├── across_intron_r1.bam.ora
+│       │   │   ├── across_intron_r1.sam
+│       │   │   ├── across_intron_r1.sam.ora
+│       │   │   ├── across_intron_r2.bam
+│       │   │   ├── across_intron_r2.bam.ora
+│       │   │   ├── across_intron_r2.sam
+│       │   │   ├── across_intron_r2.sam.ora
+│       │   │   ├── compare.sh
+│       │   │   ├── corner-BINS.SAF
+│       │   │   ├── corner-BINS.sam
+│       │   │   ├── corner-BothEnds.ora
+│       │   │   ├── corner-Chimeric.ora
+│       │   │   ├── corner-DoNotSort.ora
+│       │   │   ├── corner-EXON-ONLY.ora
+│       │   │   ├── corner-Extend3.ora
+│       │   │   ├── corner-Extend5.ora
+│       │   │   ├── corner-Fraction.ora
+│       │   │   ├── corner-INDEL.ora
+│       │   │   ├── corner-INDEL.sam
+│       │   │   ├── corner-IgnoreDup.ora
+│       │   │   ├── corner-JUNC-ONLY.ora
+│       │   │   ├── corner-JUNC.ora
+│       │   │   ├── corner-JUNC.sam
+│       │   │   ├── corner-Jcounts-FA.ora
+│       │   │   ├── corner-Jcounts-FA.ora.jcounts
+│       │   │   ├── corner-Jcounts.ora
+│       │   │   ├── corner-Jcounts.ora.jcounts
+│       │   │   ├── corner-LargestOverlap.ora
+│       │   │   ├── corner-MaxOPs.ora
+│       │   │   ├── corner-MinMAPQ.ora
+│       │   │   ├── corner-MinOverlap.ora
+│       │   │   ├── corner-MultiMapping.ora
+│       │   │   ├── corner-NH-PM.ora
+│       │   │   ├── corner-NH.ora
+│       │   │   ├── corner-NH.sam
+│       │   │   ├── corner-ONEEND-BOTH.ora
+│       │   │   ├── corner-ONEEND.ora
+│       │   │   ├── corner-ONEEND.sam
+│       │   │   ├── corner-PEdist.ora
+│       │   │   ├── corner-Read2Pos3.ora
+│       │   │   ├── corner-Read2Pos5.ora
+│       │   │   ├── corner-fractions.SAF
+│       │   │   ├── corner-fractions.ora
+│       │   │   ├── corner-fractions.sam
+│       │   │   ├── corner-reduction.sam
+│       │   │   ├── intron_between.bam
+│       │   │   ├── intron_between.bam.ora
+│       │   │   ├── intron_between.gtf
+│       │   │   ├── intron_between.sam
+│       │   │   ├── intron_between.sam.ora
+│       │   │   ├── intron_between_nointron.bam
+│       │   │   ├── intron_between_nointron.bam.ora
+│       │   │   ├── intron_between_nointron.sam
+│       │   │   ├── intron_between_nointron.sam.ora
+│       │   │   ├── test-chralias.GTF
+│       │   │   ├── test-chralias.SAF
+│       │   │   ├── test-chralias.ora
+│       │   │   ├── test-chralias.sam
+│       │   │   ├── test-chralias.txt
+│       │   │   ├── test-chrname.SAF
+│       │   │   ├── test-chrname.ora
+│       │   │   ├── test-chrname.sam
+│       │   │   ├── test-dup.sam
+│       │   │   ├── test-fracOverlap.ora
+│       │   │   ├── test-fracOverlap.sam
+│       │   │   ├── test-junc.sam
+│       │   │   ├── test-minimum-35ext.ora
+│       │   │   ├── test-minimum-3ext.ora
+│       │   │   ├── test-minimum-5ext.ora
+│       │   │   ├── test-minimum-5reduce.ora
+│       │   │   ├── test-minimum-FL.ora
+│       │   │   ├── test-minimum-O.ora
+│       │   │   ├── test-minimum-PE.ora
+│       │   │   ├── test-minimum-SE.ora
+│       │   │   ├── test-minimum-STR.ora
+│       │   │   ├── test-minimum-UNSTR.ora
+│       │   │   ├── test-minimum-dup.ora
+│       │   │   ├── test-minimum.GTF
+│       │   │   ├── test-minimum.SAF
+│       │   │   ├── test-minimum.bam
+│       │   │   ├── test-minimum.ora
+│       │   │   └── test-minimum.sam
+│       │   ├── featureCounts-test.sh
+│       │   ├── test_chr_aliases.sh
+│       │   ├── test_chr_inference.sh
+│       │   ├── test_commonusage.sh
+│       │   ├── test_corner_cases.sh
+│       │   ├── test_featurelevel.sh
+│       │   └── test_minimal_example.sh
+│       ├── subjunc
+│       │   ├── data
+│       │   │   ├── junction-reads-A.fq
+│       │   │   └── junction-reads-B.fq
+│       │   └── subjunc-test.sh
+│       ├── subread-align
+│       │   ├── data
+│       │   │   ├── cigar-test-1.fq
+│       │   │   ├── cigar-test-2.fq
+│       │   │   ├── indel-test1.fq
+│       │   │   ├── indel-test2.fq
+│       │   │   ├── subfusion_test.fa
+│       │   │   ├── subfusion_test2.fa
+│       │   │   ├── test-err-mut-r1.fq.gz
+│       │   │   ├── test-err-mut-r2.fq.gz
+│       │   │   ├── test-error-r1.fq
+│       │   │   ├── test-error-r2.fq
+│       │   │   ├── test-noerror-r1.fq
+│       │   │   └── test-noerror-r2.fq
+│       │   ├── gmon.out
+│       │   ├── readname_cigar_match.py
+│       │   ├── readname_ora_match.py
+│       │   └── subread-align-test.sh
+│       └── test_all.sh
+└── subread-2.0.3-Linux-x86_64.tar.gz
+
+21 directories, 201 files
+```

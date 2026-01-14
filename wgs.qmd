@@ -1,0 +1,727 @@
+# genome
+
+**杨昆 11312023119**
+
+made by jayz
+
+### 🧬 数据来源与背景
+
+-   **项目名称**：CDC Traveler-Based Genomic Surveillance Program
+
+-   **提交单位**：Ginkgo Bioworks（通过其子公司 Concentric 执行测序任务）
+
+-   **目标**：监测从多个美国主要机场入境的国际旅客所携带的 SARS-CoV-2 变异株及其他病原体，进行基因组测序分析。
+
+### 📦 样本与实验信息
+
+| 字段                  | 内容          | 说明                                   |
+|--------------------|------------------|----------------------------------|
+| **Sample ID**         | SAMN52666403  | 生物样本编号                           |
+| **SRA Experiment ID** | SRS26846718   | 实验编号                               |
+| **Organism**          | SARS-CoV-2    | 测序对象为新冠病毒                     |
+| **Library Name**      | COVID-19 WGS  | 表示这是一个全基因组测序（WGS）库      |
+| **Instrument**        | Element AVITI | 使用的测序仪器型号                     |
+| **Strategy**          | AMPLICON      | 使用扩增子测序策略，常用于变异检测     |
+| **Source**            | VIRAL RNA     | 样本来源为病毒 RNA                     |
+| **Selection**         | RT-PCR        | 使用逆转录 PCR 技术进行样本选择与扩增  |
+| **Layout**            | PAIRED        | 双端测序（paired-end），提高测序准确性 |
+
+### 📊 数据量与运行信息
+
+| 字段               | 内容        | 说明                             |
+|--------------------|-------------|----------------------------------|
+| **Run ID**         | SRR35790159 | 具体运行编号，可用于下载原始数据 |
+| **Spots**          | 2,320,503   | 测序读取数（reads）或测序点数    |
+| **Bases**          | 464.1M      | 总碱基数（即读取的核苷酸总数）   |
+| **Size**           | 271.9Mb     | 下载数据的大小                   |
+| **Published Date** | 2025-10-14  | 数据公开时间                     |
+
+``` bash          
+jayz@localhost:~$ mkdir yankun
+jayz@localhost:~$ cd yankun
+jayz@localhost:~/yankun$ mkdir data
+jayz@localhost:~/yankun$ cd data
+```
+``` bash          
+jayz@localhost:~/yankun/data$ prefetch SRR35790159
+
+2025-10-17T03:00:37 prefetch.3.0.3: Current preference is set to retrieve SRA Normalized Format files with full base quality scores.
+2025-10-17T03:00:38 prefetch.3.0.3: 1) Downloading 'SRR35790159'...
+2025-10-17T03:00:38 prefetch.3.0.3: SRA Normalized Format file is being retrieved, if this is different from your preference, it may be due to current file availability.
+2025-10-17T03:00:38 prefetch.3.0.3:  Downloading via HTTPS...
+2025-10-17T03:01:04 prefetch.3.0.3:  HTTPS download succeed
+2025-10-17T03:01:04 prefetch.3.0.3:  'SRR35790159' is valid
+2025-10-17T03:01:04 prefetch.3.0.3: 1) 'SRR35790159' was downloaded successfully
+2025-10-17T03:01:04 prefetch.3.0.3: 'SRR35790159' has 0 unresolved dependencies
+```
+
+``` bash         
+jayz@localhost:~/yankun/data$ ls
+SRR35790159
+jayz@localhost:~/yankun/data$ fasterq-dump SRR35790159
+spots read      : 2,320,503
+reads read      : 4,641,006
+reads written   : 4,641,006
+jayz@localhost:~/yankun/data$ fasterq-dump SRR35790159 --split-files -O fastq_files
+spots read      : 2,320,503
+reads read      : 4,641,006
+reads written   : 4,641,006
+jayz@localhost:~/yankun/data$ ls
+SRR35790159  SRR35790159_1.fastq  SRR35790159_2.fastq  fastq_files
+```
+
+``` bash          
+jayz@localhost:~/yankun/data$ fastqc SRR35790159_1.fastq  SRR35790159_2.fastq
+null
+null
+Started analysis of SRR35790159_1.fastq
+Approx 5% complete for SRR35790159_1.fastq
+Approx 10% complete for SRR35790159_1.fastq
+Approx 15% complete for SRR35790159_1.fastq
+Approx 20% complete for SRR35790159_1.fastq
+Approx 25% complete for SRR35790159_1.fastq
+Approx 30% complete for SRR35790159_1.fastq
+Approx 35% complete for SRR35790159_1.fastq
+Approx 40% complete for SRR35790159_1.fastq
+Approx 45% complete for SRR35790159_1.fastq
+Approx 50% complete for SRR35790159_1.fastq
+Approx 55% complete for SRR35790159_1.fastq
+Approx 60% complete for SRR35790159_1.fastq
+Approx 65% complete for SRR35790159_1.fastq
+Approx 70% complete for SRR35790159_1.fastq
+Approx 75% complete for SRR35790159_1.fastq
+Approx 80% complete for SRR35790159_1.fastq
+Approx 85% complete for SRR35790159_1.fastq
+Approx 90% complete for SRR35790159_1.fastq
+Approx 95% complete for SRR35790159_1.fastq
+Analysis complete for SRR35790159_1.fastq
+Started analysis of SRR35790159_2.fastq
+Approx 5% complete for SRR35790159_2.fastq
+Approx 10% complete for SRR35790159_2.fastq
+Approx 15% complete for SRR35790159_2.fastq
+Approx 20% complete for SRR35790159_2.fastq
+Approx 25% complete for SRR35790159_2.fastq
+Approx 30% complete for SRR35790159_2.fastq
+Approx 35% complete for SRR35790159_2.fastq
+Approx 40% complete for SRR35790159_2.fastq
+Approx 45% complete for SRR35790159_2.fastq
+Approx 50% complete for SRR35790159_2.fastq
+Approx 55% complete for SRR35790159_2.fastq
+Approx 60% complete for SRR35790159_2.fastq
+Approx 65% complete for SRR35790159_2.fastq
+Approx 70% complete for SRR35790159_2.fastq
+Approx 75% complete for SRR35790159_2.fastq
+Approx 80% complete for SRR35790159_2.fastq
+Approx 85% complete for SRR35790159_2.fastq
+Approx 90% complete for SRR35790159_2.fastq
+Approx 95% complete for SRR35790159_2.fastq
+Analysis complete for SRR35790159_2.fastq
+```
+
+![](images/屏幕截图%202025-10-17%20111119.png)
+
+![](images/屏幕截图%202025-10-17%20111523.png)
+
+![](images/屏幕截图%202025-10-17%20111528.png)
+
+![](images/屏幕截图%202025-10-17%20111534.png)
+
+![](images/屏幕截图%202025-10-17%20111541.png)
+
+看看第二个fatsq文件
+
+![](images/屏幕截图%202025-10-17%20112317.png)
+
+### 🔬 FastQC 模块解释与分析
+
+| 模块 | 含义 | 标红的可能原因 | 是否建议使用 `fastp` |
+|------------------|------------------|------------------|------------------|
+| **Per Sequence Content** | 检查每条 read 中各位置的碱基组成是否一致 | AMPLICON 测序常见，因引物或扩增偏好导致前几位碱基组成偏离 | ✅ 是，`fastp` 可剪切前端偏差区域 |
+| **Per GC Content** | 检查 reads 的 GC 含量分布是否符合正态分布 | 病毒基因组 GC 含量本身偏低或样本混杂 | ✅ 是，`fastp` 可去除异常 reads，改善分布 |
+| **Sequence Duplication Levels** | 检查重复 reads 的比例 | AMPLICON 测序中 PCR 扩增会导致高重复 | ✅ 是，`fastp` 可去除完全重复 reads |
+| **Overrepresented Sequences** | 检查是否存在频率异常高的序列（如接头、引物） | 接头污染、引物残留或扩增伪影 | ✅ 是，`fastp` 可自动识别并去除接头序列 |
+
+### ✅ 是否有必要使用 `fastp`？
+
+**非常有必要。**
+
+尽管 AMPLICON 测序本身会导致某些 FastQC 模块偏离“理想状态”，但：
+
+-   **接头污染** 和 **重复 reads** 会影响比对效率和变异检测准确性；
+
+-   **前端碱基偏差** 会干扰某些下游分析（如变异定位）；
+
+-   `fastp 可自动处理这些问题，并生成新的质控报告，帮助你判断清洗效果。`
+
+### 🧪 推荐 `fastp` 命令（双端数据）
+
+``` bash           
+fastp \
+  -i SRR35790159_1.fastq \
+  -I SRR35790159_2.fastq \
+  -o SRR35790159_trimmed_1.fastq \
+  -O SRR35790159_trimmed_2.fastq \
+  --detect_adapter_for_pe \
+  --trim_poly_g \
+  --cut_front \
+  --cut_tail \
+  --cut_window_size 4 \
+  --cut_mean_quality 20 \
+  --length_required 50 \
+  --thread 8 \
+  --html SRR35790159_fastp.html \
+  --json SRR35790159_fastp.json
+```
+
+``` bash          
+jayz@localhost:~/yankun/data$ fastp \
+  -i SRR35790159_1.fastq \
+  -I SRR35790159_2.fastq \
+  -o SRR35790159_trimmed_1.fastq \
+  -O SRR35790159_trimmed_2.fastq \
+  --detect_adapter_for_pe \
+  --trim_poly_g \
+  --cut_front \
+  --cut_tail \
+  --cut_window_size 4 \
+  --cut_mean_quality 20 \
+  --length_required 50 \
+  --thread 8 \
+  --html SRR35790159_fastp.html \
+  --json SRR35790159_fastp.json
+Detecting adapter sequence for read1...
+>I7_Nextera_Transposase_1 | >Trans2_rc | >I7_Nextera_Transposase_1 | >Trans2_rc
+CTGTCTCTTATACACATCTCCGAGCCCACGAGAC
+
+Detecting adapter sequence for read2...
+>I5_Nextera_Transposase_1 | >Trans1_rc | >I5_Nextera_Transposase_1 | >Trans1_rc
+CTGTCTCTTATACACATCTGACGCTGCCGACGA
+
+Read1 before filtering:
+total reads: 2320503
+total bases: 232050300
+Q20 bases: 219390368(94.5443%)
+Q30 bases: 212369986(91.5189%)
+
+Read2 before filtering:
+total reads: 2320503
+total bases: 232050300
+Q20 bases: 220444754(94.9987%)
+Q30 bases: 215945831(93.0599%)
+
+Read1 after filtering:
+total reads: 2198482
+total bases: 215526175
+Q20 bases: 212304242(98.5051%)
+Q30 bases: 205663485(95.4239%)
+
+Read2 after filtering:
+total reads: 2198482
+total bases: 215591822
+Q20 bases: 213302358(98.9381%)
+Q30 bases: 209004462(96.9445%)
+
+Filtering result:
+reads passed filter: 4396964
+reads failed due to low quality: 660
+reads failed due to too many N: 356
+reads failed due to too short: 243026
+reads with adapter trimmed: 535660
+bases trimmed due to adapters: 12174695
+
+Duplication rate: 70.2497%
+
+Insert size peak (evaluated by paired-end reads): 148
+
+JSON report: SRR35790159_fastp.json
+HTML report: SRR35790159_fastp.html
+
+fastp -i SRR35790159_1.fastq -I SRR35790159_2.fastq -o SRR35790159_trimmed_1.fastq -O SRR35790159_trimmed_2.fastq --detect_adapter_for_pe --trim_poly_g --cut_front --cut_tail --cut_window_size 4 --cut_mean_quality 20 --length_required 50 --thread 8 --html SRR35790159_fastp.html --json SRR35790159_fastp.json
+```
+
+![](images/屏幕截图%202025-10-17%20113314.png)
+
+之后fastqc查看一下
+
+``` bash           
+jayz@localhost:~/yankun/data$ fastqc SRR35790159_trimmed_1.fastq SRR35790159_trimmed_2.fastq
+null
+null
+Started analysis of SRR35790159_trimmed_1.fastq
+Approx 5% complete for SRR35790159_trimmed_1.fastq
+Approx 10% complete for SRR35790159_trimmed_1.fastq
+Approx 15% complete for SRR35790159_trimmed_1.fastq
+Approx 20% complete for SRR35790159_trimmed_1.fastq
+Approx 25% complete for SRR35790159_trimmed_1.fastq
+Approx 30% complete for SRR35790159_trimmed_1.fastq
+Approx 35% complete for SRR35790159_trimmed_1.fastq
+Approx 40% complete for SRR35790159_trimmed_1.fastq
+Approx 45% complete for SRR35790159_trimmed_1.fastq
+Approx 50% complete for SRR35790159_trimmed_1.fastq
+Approx 55% complete for SRR35790159_trimmed_1.fastq
+Approx 60% complete for SRR35790159_trimmed_1.fastq
+Approx 65% complete for SRR35790159_trimmed_1.fastq
+Approx 70% complete for SRR35790159_trimmed_1.fastq
+Approx 75% complete for SRR35790159_trimmed_1.fastq
+Approx 80% complete for SRR35790159_trimmed_1.fastq
+Approx 85% complete for SRR35790159_trimmed_1.fastq
+Approx 90% complete for SRR35790159_trimmed_1.fastq
+Approx 95% complete for SRR35790159_trimmed_1.fastq
+Analysis complete for SRR35790159_trimmed_1.fastq
+Started analysis of SRR35790159_trimmed_2.fastq
+Approx 5% complete for SRR35790159_trimmed_2.fastq
+Approx 10% complete for SRR35790159_trimmed_2.fastq
+Approx 15% complete for SRR35790159_trimmed_2.fastq
+Approx 20% complete for SRR35790159_trimmed_2.fastq
+Approx 25% complete for SRR35790159_trimmed_2.fastq
+Approx 30% complete for SRR35790159_trimmed_2.fastq
+Approx 35% complete for SRR35790159_trimmed_2.fastq
+Approx 40% complete for SRR35790159_trimmed_2.fastq
+Approx 45% complete for SRR35790159_trimmed_2.fastq
+Approx 50% complete for SRR35790159_trimmed_2.fastq
+Approx 55% complete for SRR35790159_trimmed_2.fastq
+Approx 60% complete for SRR35790159_trimmed_2.fastq
+Approx 65% complete for SRR35790159_trimmed_2.fastq
+Approx 70% complete for SRR35790159_trimmed_2.fastq
+Approx 75% complete for SRR35790159_trimmed_2.fastq
+Approx 80% complete for SRR35790159_trimmed_2.fastq
+Approx 85% complete for SRR35790159_trimmed_2.fastq
+Approx 90% complete for SRR35790159_trimmed_2.fastq
+Approx 95% complete for SRR35790159_trimmed_2.fastq
+Analysis complete for SRR35790159_trimmed_2.fastq
+jayz@localhost:~/yankun/data$ ls
+SRR35790159                SRR35790159_2_fastqc.zip           SRR35790159_trimmed_2.fastq
+SRR35790159_1.fastq        SRR35790159_fastp.html             SRR35790159_trimmed_2_fastqc.html
+SRR35790159_1_fastqc.html  SRR35790159_fastp.json             SRR35790159_trimmed_2_fastqc.zip
+SRR35790159_1_fastqc.zip   SRR35790159_trimmed_1.fastq        fastq_files
+SRR35790159_2.fastq        SRR35790159_trimmed_1_fastqc.html
+SRR35790159_2_fastqc.html  SRR35790159_trimmed_1_fastqc.zip
+```
+
+### 🧬 推荐参考基因组：SARS-CoV-2 Wuhan-Hu-1
+
+-   **NCBI RefSeq ID**：NC_045512.2
+
+-   **描述**：这是最早发布的 SARS-CoV-2 完整参考基因组（Wuhan-Hu-1 株）
+
+-   **长度**：29,903 bp
+
+-   **用途**：广泛用于变异检测、比对、注释等分析任务
+
+### 📥 下载参考基因组并放入 `reference/` 文件夹
+
+你可以使用以下命令在 Linux 终端中完成下载：
+
+``` bash          
+mkdir -p reference
+cd reference
+
+# 下载参考基因组 FASTA 文件
+wget -O SARS-CoV-2_reference.fasta "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/858/895/GCF_009858895.2_ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.fna.gz"
+
+# 解压
+gunzip GCF_009858895.2_ASM985889v3_genomic.fna.gz
+
+# 重命名为统一格式
+mv GCF_009858895.2_ASM985889v3_genomic.fna SARS-CoV-2_reference.fasta
+```
+
+``` bash          
+jayz@localhost:~/yankun/data/reference$ wget --no-proxy -O SARS-CoV-2_reference.fasta.gz "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/858/895/GCF_009858895.2_ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.fna.gz"
+--2025-10-17 11:42:09--  https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/009/858/895/GCF_009858895.2_ASM985889v3/GCF_009858895.2_ASM985889v3_genomic.fna.gz
+Resolving ftp.ncbi.nlm.nih.gov (ftp.ncbi.nlm.nih.gov)... 130.14.250.11, 130.14.250.12, 130.14.250.31, ...
+Connecting to ftp.ncbi.nlm.nih.gov (ftp.ncbi.nlm.nih.gov)|130.14.250.11|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 9591 (9.4K) [application/x-gzip]
+Saving to: ‘SARS-CoV-2_reference.fasta.gz’
+
+SARS-CoV-2_reference.fasta.gz 100%[=================================================>]   9.37K  --.-KB/s    in 0s
+
+2025-10-17 11:42:11 (193 MB/s) - ‘SARS-CoV-2_reference.fasta.gz’ saved [9591/9591]
+
+jayz@localhost:~/yankun/data/reference$ ls
+SARS-CoV-2_reference.fasta  SARS-CoV-2_reference.fasta.gz
+jayz@localhost:~/yankun/data/reference$
+```
+
+### 下一步建议
+
+1.  **构建索引（以 bwa 为例）**：
+
+    ``` bash           
+    bwa index reference/SARS-CoV-2_reference.fasta
+    ```
+
+``` bash           
+jayz@localhost:~/yankun/data$ bwa index reference/SARS-CoV-2_reference.fasta
+[bwa_index] Pack FASTA... 0.00 sec
+[bwa_index] Construct BWT for the packed sequence...
+[bwa_index] 0.00 seconds elapse.
+[bwa_index] Update BWT... 0.00 sec
+[bwa_index] Pack forward-only FASTA... 0.00 sec
+[bwa_index] Construct SA from BWT and Occ... 0.00 sec
+[main] Version: 0.7.17-r1188
+[main] CMD: bwa index reference/SARS-CoV-2_reference.fasta
+[main] Real time: 0.076 sec; CPU: 0.002 sec
+```
+
+-   **比对 reads 到参考基因组**：
+
+   
+
+    ```bash         
+    bwa mem reference/SARS-CoV-2_reference.fasta \
+      SRR35790159_trimmed_1.fastq SRR35790159_trimmed_2.fastq \
+      > SRR35790159_aligned.sam
+    ```
+
+   ``` bash           
+    jayz@localhost:~/yankun/data$ bwa mem reference/SARS-CoV-2_reference.fasta \
+      SRR35790159_trimmed_1.fastq SRR35790159_trimmed_2.fastq \
+      > SRR35790159_aligned.sam
+    [M::bwa_idx_load_from_disk] read 0 ALT contigs
+    [M::process] read 101986 sequences (10000008 bp)...
+    [M::process] read 101942 sequences (10000099 bp)...
+    [M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (5, 49958, 0, 8)
+    [M::mem_pestat] skip orientation FF as there are not enough pairs
+    [M::mem_pestat] analyzing insert size distribution for orientation FR...
+    [M::mem_pestat] (25, 50, 75) percentile: (129, 174, 230)
+    [M::mem_pestat] low and high boundaries for computing mean and std.dev: (1, 432)
+    [M::mem_pestat] mean and std.dev: (183.42, 72.11)
+    [M::mem_pestat] low and high boundaries for proper pairs: (1, 533)
+    [M::mem_pestat] skip orientation RF as there are not enough pairs
+    [M::mem_pestat] skip orientation RR as there are not enough pairs
+    [M::mem_process_seqs] Processed 101986 reads in 1.489 CPU sec, 1.417 real sec
+    [M::process] read 101990 sequences (10000097 bp)...
+    ...
+    ...
+    [M::mem_pestat] skip orientation FF as there are not enough pairs
+    [M::mem_pestat] analyzing insert size distribution for orientation FR...
+    [M::mem_pestat] (25, 50, 75) percentile: (129, 174, 230)
+    [M::mem_pestat] low and high boundaries for computing mean and std.dev: (1, 432)
+    [M::mem_pestat] mean and std.dev: (183.93, 72.18)
+    [M::mem_pestat] low and high boundaries for proper pairs: (1, 533)
+    [M::mem_pestat] skip orientation RF as there are not enough pairs
+    [M::mem_pestat] skip orientation RR as there are not enough pairs
+    [M::mem_process_seqs] Processed 101944 reads in 1.532 CPU sec, 1.488 real sec
+    [M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (1, 5568, 0, 0)
+    [M::mem_pestat] skip orientation FF as there are not enough pairs
+    [M::mem_pestat] analyzing insert size distribution for orientation FR...
+    [M::mem_pestat] (25, 50, 75) percentile: (131, 176, 230)
+    [M::mem_pestat] low and high boundaries for computing mean and std.dev: (1, 428)
+    [M::mem_pestat] mean and std.dev: (184.31, 71.90)
+    [M::mem_pestat] low and high boundaries for proper pairs: (1, 527)
+    [M::mem_pestat] skip orientation RF as there are not enough pairs
+    [M::mem_pestat] skip orientation RR as there are not enough pairs
+    [M::mem_process_seqs] Processed 11366 reads in 0.211 CPU sec, 0.176 real sec
+    [main] Version: 0.7.17-r1188
+    [main] CMD: bwa mem reference/SARS-CoV-2_reference.fasta SRR35790159_trimmed_1.fastq SRR35790159_trimmed_2.fastq
+    [main] Real time: 62.444 sec; CPU: 66.297 sec
+    ```
+
+    ``` bash          
+    jayz@localhost:~/yankun/data$ ls
+    SRR35790159                SRR35790159_2_fastqc.zip           SRR35790159_trimmed_1_fastqc.zip   test.sam
+    SRR35790159_1.fastq        SRR35790159_aligned.sam            SRR35790159_trimmed_2.fastq        test_1.fastq
+    SRR35790159_1_fastqc.html  SRR35790159_fastp.html             SRR35790159_trimmed_2_fastqc.html  test_2.fastq
+    SRR35790159_1_fastqc.zip   SRR35790159_fastp.json             SRR35790159_trimmed_2_fastqc.zip   test_minimap.sam
+    SRR35790159_2.fastq        SRR35790159_trimmed_1.fastq        fastq_files
+    SRR35790159_2_fastqc.html  SRR35790159_trimmed_1_fastqc.html  reference
+    ```
+
+-   **转换为 BAM 并排序**：
+
+    ``` bash           
+    samtools view -Sb SRR35790159_aligned.sam | samtools sort -o SRR35790159_sorted.bam
+    samtools index SRR35790159_sorted.bam
+    ```
+
+   ``` bash         
+    jayz@localhost:~/yankun/data$ samtools view -Sb SRR35790159_aligned.sam | samtools sort -o SRR35790159_sorted.bam
+    [bam_sort_core] merging from 1 files and 1 in-memory blocks...
+    jayz@localhost:~/yankun/data$ samtools index SRR35790159_sorted.bam
+    ```
+
+-   **覆盖度分析**：
+
+    ``` bash           
+    samtools depth SRR35790159_sorted.bam > SRR35790159_coverage.txt 
+    ```
+
+    ``` bash          
+    jayz@localhost:~/yankun/data$ samtools view -Sb SRR35790159_aligned.sam | samtools sort -o SRR35790159_sorted.bam
+    [bam_sort_core] merging from 1 files and 1 in-memory blocks...
+    jayz@localhost:~/yankun/data$ samtools index SRR35790159_sorted.bam
+    jayz@localhost:~/yankun/data$ samtools depth SRR35790159_sorted.bam > SRR35790159_coverage.txt
+    jayz@localhost:~/yankun/data$ head SRR35790159_coverage.txt -n 10
+    NC_045512.2     47      1
+    NC_045512.2     48      5
+    NC_045512.2     49      9
+    NC_045512.2     50      9
+    NC_045512.2     51      9
+    NC_045512.2     52      9
+    NC_045512.2     53      11
+    NC_045512.2     54      15
+    NC_045512.2     55      15
+    NC_045512.2     56      30
+    ```
+
+    表示参考序列 `NC_045512.2` 的第 47 个碱基位置被覆盖了 1 次
+
+### 🔍 快速分析
+
+-   从第 47 位开始，覆盖度逐渐上升，说明测序 reads 在这个区域开始有比对。
+
+-   第 56 位覆盖度达到 30，说明该区域可能是 reads 富集区域或 PCR 富集区域。
+
+把文件导入windows可视化，不想在linux做，因为下包太慢了
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+
+df = pd.read_csv(r"E:\acode\wsl\data4\SRR35790159_coverage.txt", sep="\t", header=None, names=["ref", "pos", "depth"])
+plt.figure(figsize=(12, 4))
+plt.plot(df["pos"], df["depth"], color="steelblue")
+plt.xlabel("Position on reference")
+plt.ylabel("Coverage depth")
+plt.title("Coverage profile of SRR35790159")
+plt.tight_layout()
+plt.show()
+```
+
+![](plot-33.png)
+
+#### ✅ 总覆盖位置数（即有 reads 覆盖的位置数）
+
+``` bash          
+wc -l SRR35790159_coverage.txt 
+```
+``` bash          
+jayz@localhost:~/yankun/data$ wc -l SRR35790159_coverage.txt
+26444 SRR35790159_coverage.txt
+```
+
+#### ✅ 平均覆盖深度
+
+``` bash       
+awk '{sum+=$3} END {print "Average depth:", sum/NR}' SRR35790159_coverage.txt 
+```
+
+``` bash         
+jayz@localhost:~/yankun/data$ awk '{sum+=$3} END {print "Average depth:", sum/NR}' SRR35790159_coverage.txt
+Average depth: 15891
+```
+
+#### ✅ 最大覆盖深度
+
+``` bash          
+awk 'max<$3{max=$3} END{print "Max depth:", max}' SRR35790159_coverage.txt 
+```
+
+``` bash          
+jayz@localhost:~/yankun/data$ awk 'max<$3{max=$3} END{print "Max depth:", max}' SRR35790159_coverage.txt
+Max depth: 419399
+```
+
+#### ✅ 最小覆盖深度（非零）
+
+``` bash           
+awk 'min==0 || ($3<min && $3>0){min=$3} END{print "Min depth:", min}' SRR35790159_coverage.txt 
+```
+
+``` bash           
+jayz@localhost:~/yankun/data$ awk 'min==0 || ($3<min && $3>0){min=$3} END{print "Min depth:", min}' SRR35790159_coverage.txt
+Min depth: 1
+```
+
+### ✅ 筛选出覆盖度 \>30× 的区域总数
+
+``` bash          
+awk '$3 > 30 {count++} END {print "Positions with depth >30x:", count}' SRR35790159_coverage.txt 
+```
+
+``` bash          
+jayz@localhost:~/yankun/data$ awk '$3 > 30 {count++} END {print "Positions with depth >30x:", count}' SRR35790159_coverage.txt
+Positions with depth >30x: 22451
+```
+
+如果想计算比例（覆盖度 \>30× 的区域占总参考长度）：
+
+``` bash          
+total=$(wc -l < SRR35790159_coverage.txt)
+high=$(awk '$3 > 30 {count++} END {print count}' SRR35790159_coverage.txt)
+echo "Proportion >30x: " $(echo "$high/$total" | bc -l)
+```
+
+``` bash           
+jayz@localhost:~/yankun/data$ total=$(wc -l < SRR35790159_coverage.txt)
+high=$(awk '$3 > 30 {count++} END {print count}' SRR35790159_coverage.txt)
+echo "Proportion >30x: " $(echo "$high/$total" | bc -l)
+Proportion >30x:  .84900166389351081530
+```
+
+发现约 84.9% 的参考区域覆盖度高于 30×
+
+## SNP变异分析
+
+## 🧱 第一步：生成高覆盖区域 BED 文件（\>30×）
+
+``` bash          
+awk '$3 > 30 {print $1"\t"$2-1"\t"$2}' SRR35790159_coverage.txt > high_coverage.bed 
+```
+
+说明：
+
+-   BED 格式是 0-based 左闭右开，所以 `start = pos - 1`, `end = pos`
+
+-   输出格式为：`<ref> <start> <end>`
+
+##  第二步：SNP Calling 流程（推荐用 bcftools）
+
+：
+
+-   排序后的 BAM 文件：`SRR35790159_sorted.bam`
+
+-   索引文件：`SRR35790159_sorted.bam.bai`
+
+-   参考序列：`SARS-CoV-2_reference.fasta`（已索引）
+
+### ✅ 1. 创建 mpileup（限制在高覆盖区域）
+
+``` bash          
+bcftools mpileup --threads 8 -f reference/SARS-CoV-2_reference.fasta SRR35790159_sorted.bam -Oz -o raw.vcf.gz
+
+#threads 8 ,8核心加快速度
+```
+
+### ✅ 2. SNP Calling
+
+``` bash        
+bcftools call -m --ploidy 1 -Oz -o call.vcf.gz raw.vcf.gz
+```
+
+## 🧭 索引 VCF 文件
+
+使用 `tabix` 为压缩的 VCF 文件创建索引：
+
+
+
+``` bash        
+tabix -p vcf call.vcf.gz 
+```
+
+这会生成 `call.vcf.gz.tbi` 索引文件，供后续快速查询和可视化使用。
+
+## 📊 可视化 SNP 分布（Python）
+
+你可以用 `pysam` 或 `cyvcf2` 读取 VCF 文件并用 `matplotlib` 可视化 SNP 分布：
+
+### ✅ 示例：绘制 SNP 在参考序列上的位置分布
+
+
+
+```{python}         
+import gzip
+import matplotlib.pyplot as plt
+
+positions = []
+with gzip.open(r"E:\acode\wsl\data4\call.vcf.gz", "rt") as f:
+    for line in f:
+        if line.startswith("#"):
+            continue
+        fields = line.strip().split("\t")
+        pos = int(fields[1])
+        positions.append(pos)
+
+plt.figure(figsize=(12, 4))
+plt.hist(positions, bins=100, color="darkorange", edgecolor="black")
+plt.xlabel("Position on reference genome")
+plt.ylabel("SNP count")
+plt.title("SNP Distribution Across Reference")
+plt.tight_layout()
+plt.show()
+```
+
+### ✅ 示例：统计 SNP 数量和质量分布
+
+
+
+``` {python}        
+import gzip
+import matplotlib.pyplot as plt
+
+qual_scores = []
+with gzip.open(r"E:\acode\wsl\data4\call.vcf.gz", "rt") as f:
+    for line in f:
+        if line.startswith("#"):
+            continue
+        fields = line.strip().split("\t")
+        qual_field = fields[5]
+        if qual_field != ".":
+            try:
+                qual = float(qual_field)
+                qual_scores.append(qual)
+            except ValueError:
+                continue  # 忽略无法解析的质量值
+
+plt.figure(figsize=(8, 4))
+plt.hist(qual_scores, bins=50, color="steelblue", edgecolor="black")
+plt.xlabel("SNP Quality Score")
+plt.ylabel("Count")
+plt.title("SNP Quality Distribution")
+plt.tight_layout()
+plt.show()
+
+```
+
+
+
+```bash
+jayz@localhost:~/yankun$ tree
+└── data
+    ├── SRR35790159
+    │   └── SRR35790159.sra
+    ├── SRR35790159_1.fastq
+    ├── SRR35790159_1_fastqc.html
+    ├── SRR35790159_1_fastqc.zip
+    ├── SRR35790159_2.fastq
+    ├── SRR35790159_2_fastqc.html
+    ├── SRR35790159_2_fastqc.zip
+    ├── SRR35790159_aligned.sam
+    ├── SRR35790159_coverage.txt
+    ├── SRR35790159_fastp.html
+    ├── SRR35790159_fastp.json
+    ├── SRR35790159_raw.bcf
+    ├── SRR35790159_sorted.bam
+    ├── SRR35790159_sorted.bam.bai
+    ├── SRR35790159_trimmed_1.fastq
+    ├── SRR35790159_trimmed_1_fastqc.html
+    ├── SRR35790159_trimmed_1_fastqc.zip
+    ├── SRR35790159_trimmed_2.fastq
+    ├── SRR35790159_trimmed_2_fastqc.html
+    ├── SRR35790159_trimmed_2_fastqc.zip
+    ├── call.vcf.gz
+    ├── call.vcf.gz.tbi
+    ├── fastq_files
+    │   ├── SRR35790159_1.fastq
+    │   └── SRR35790159_2.fastq
+    ├── high_coverage.bed
+    ├── raw.vcf.gz
+    ├── reference
+    │   ├── SARS-CoV-2_reference.fasta
+    │   ├── SARS-CoV-2_reference.fasta.amb
+    │   ├── SARS-CoV-2_reference.fasta.ann
+    │   ├── SARS-CoV-2_reference.fasta.bwt
+    │   ├── SARS-CoV-2_reference.fasta.fai
+    │   ├── SARS-CoV-2_reference.fasta.gz
+    │   ├── SARS-CoV-2_reference.fasta.pac
+    │   └── SARS-CoV-2_reference.fasta.sa
+    ├── test.sam
+    ├── test_1.fastq
+    ├── test_2.fastq
+    └── test_minimap.sam
+
+5 directories, 38 files
+
+```
